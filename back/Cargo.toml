@@ -1,0 +1,28 @@
+[package]
+name = "back"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+chrono = { version = "0.4", features = ["serde"] }
+aws-sdk-s3 = "1.140.0"
+axum = { version = "0.8.9", features = ["macros","multipart","query","ws"] }
+axum-cookie = "0.3.0"
+bcrypt = "0.19.3"
+image = "0.25.10"
+reqwest = { version = "0.13.1",  features = ["json","query"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+sqlx = {version = "0.9.0", features=["runtime-tokio", "tls-rustls", "postgres","chrono","bigdecimal","json"]}
+tokio = {version = "1.39", features = ["full"]}
+tower-http = {version = "0.7.0", features = ["cors","trace"]}
+tracing = "0.1.44"
+tracing-subscriber = {version = "0.3.23",  features = ["env-filter","std"]}
+
+serde = { version = "1.0", features = ["derive"] }
+tower = { version = "0.5", features = ["util"] }
+
+dotenv = "0.15.0"
+
+
