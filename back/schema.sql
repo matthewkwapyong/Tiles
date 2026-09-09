@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS curated_onboarding_items (
 
 CREATE INDEX IF NOT EXISTS idx_curated_onboarding_tmdb ON curated_onboarding_items (tmdb_id, media_type);
 CREATE INDEX IF NOT EXISTS idx_curated_onboarding_display ON curated_onboarding_items (display_order ASC);
-    
+
 CREATE TABLE IF NOT EXISTS accounts (
     id                    TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     "userId"              TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -236,10 +236,11 @@ CREATE INDEX IF NOT EXISTS idx_review_embeddings_vec
 -- Aggregated embedding profile per user; recomputed by Python sidecar on a schedule
 -- or after a configurable number of new ratings/reviews.
 -- =============================================================================
-
+-- Corrected version — dimension matches media_item_vectors, not the old 384 placeholder
 CREATE TABLE IF NOT EXISTS user_taste_vectors (
     user_id         TEXT        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    embedding       vector(384) NOT NULL,
+    embedding       vector(26)  NOT NULL,   -- must match media_item_vectors dimension
+    vocabulary_version INTEGER  NOT NULL DEFAULT 1,
     model_version   TEXT,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -247,6 +248,7 @@ CREATE TABLE IF NOT EXISTS user_taste_vectors (
 CREATE INDEX IF NOT EXISTS idx_user_taste_vectors_vec
     ON user_taste_vectors USING ivfflat (embedding vector_cosine_ops)
     WITH (lists = 50);
+
 
 
 -- =============================================================================
@@ -269,7 +271,9 @@ CREATE INDEX IF NOT EXISTS idx_recommendations_user         ON recommendations (
 CREATE INDEX IF NOT EXISTS idx_recommendations_score        ON recommendations (user_id, score DESC);
 CREATE INDEX IF NOT EXISTS idx_recommendations_generated_at ON recommendations (generated_at DESC);
 
-
+ALTER TABLE recommendations
+    ADD COLUMN content_score NUMERIC(6,4),
+    ADD COLUMN cf_score NUMERIC(6,4);
 -- =============================================================================
 -- Helper: auto-update updated_at timestamps
 -- =============================================================================
@@ -293,3 +297,60 @@ CREATE OR REPLACE TRIGGER trg_ratings_updated_at
 CREATE OR REPLACE TRIGGER trg_reviews_updated_at
     BEFORE UPDATE ON reviews
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+CREATE TABLE IF NOT EXISTS genre_vocabulary (
+    id SERIAL PRIMARY KEY,
+    genre_name TEXT NOT NULL UNIQUE,
+    position INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_genre_vocabulary_genre_name ON genre_vocabulary(genre_name);
+
+
+CREATE TABLE IF NOT EXISTS media_item_vectors (
+    media_item_id   BIGINT      PRIMARY KEY REFERENCES media_items(id) ON DELETE CASCADE,
+    embedding       vector(26)  NOT NULL,   -- dimension = genre count for now; adjust as you add features
+    vocabulary_version INTEGER  NOT NULL DEFAULT 1,  -- bump if you ever rebuild the vocabulary/reorder
+    computed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_item_vectors_vec
+    ON media_item_vectors USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);
+
+
+
+CREATE TABLE IF NOT EXISTS user_cf_vectors (
+    user_id         TEXT        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    embedding       vector(50)  NOT NULL,   -- dimension = your chosen factor count
+    model_version   INTEGER     NOT NULL DEFAULT 1,  -- bump on full retrain
+    trained_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS media_cf_vectors (
+    media_item_id   BIGINT      PRIMARY KEY REFERENCES media_items(id) ON DELETE CASCADE,
+    embedding       vector(50)  NOT NULL,
+    model_version   INTEGER     NOT NULL DEFAULT 1,
+    trained_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_cf_vectors_vec
+    ON media_cf_vectors USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);
+
+
+    -- Aggregated per-user review taste (analogous to user_taste_vectors)
+CREATE TABLE IF NOT EXISTS user_review_vectors (
+    user_id         TEXT        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    embedding       vector(384) NOT NULL,
+    model_version   TEXT,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Aggregated per-movie review profile (built from everyone's reviews of it)
+CREATE TABLE IF NOT EXISTS media_review_vectors (
+    media_item_id   BIGINT      PRIMARY KEY REFERENCES media_items(id) ON DELETE CASCADE,
+    embedding       vector(384) NOT NULL,
+    model_version   TEXT,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

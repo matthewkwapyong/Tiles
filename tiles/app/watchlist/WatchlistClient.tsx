@@ -15,7 +15,7 @@ export default function WatchlistClient({ initialItems }: { initialItems: Watchl
   const handleRemove = async (mediaId: number) => {
     setItems((prev) => prev.filter((item) => item.id !== mediaId));
     try {
-      await fetch(`${BACKEND}/api/media/${mediaId}/watchlist`, {
+      await fetch(`${BACKEND}/media/${mediaId}/watchlist`, {
         method: "DELETE",
         credentials: "include",
       });

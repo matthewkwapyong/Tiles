@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
+use tracing_subscriber::fmt::format;
 use std::sync::Arc;
 
 use crate::{
@@ -15,9 +16,6 @@ use crate::{
 
 pub const MIN_ONBOARDING_RATINGS: usize = 10;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Error type
-// ─────────────────────────────────────────────────────────────────────────────
 
 pub struct ApiError(anyhow::Error);
 
@@ -262,9 +260,9 @@ pub async fn submit_onboarding_ratings(
     let user_id = session.user_id.clone();
     let client = state.http_client.clone();
     tokio::spawn(async move {
-        let sidecar_url = "http://localhost:5000/compute-taste-vector";
-        match client.post(sidecar_url).json(&serde_json::json!({ "user_id": user_id })).send().await {
-            Ok(res) => tracing::info!("ML Sidecar taste vector triggered for {user_id}: status={}", res.status()),
+        let sidecar_url = format!("http://localhost:8080/complete_onboarding/{}",user_id);
+        match client.get(sidecar_url).send().await {
+            Ok(res) => tracing::info!("ML Sidecar onboarding for {user_id}: status={}", res.status()),
             Err(e) => tracing::warn!("ML Sidecar not reachable during onboarding (non-fatal): {e}"),
         }
     });

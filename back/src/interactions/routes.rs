@@ -207,20 +207,30 @@ pub async fn save_user_review(
         return Ok((StatusCode::BAD_REQUEST, "Review body cannot be empty").into_response());
     }
 
-    sqlx::query(
+    let review_id = sqlx::query_scalar::<_, i64>(
         r#"
         INSERT INTO reviews (user_id, media_item_id, body)
         VALUES ($1, $2, $3)
         ON CONFLICT (user_id, media_item_id) DO UPDATE SET
             body = EXCLUDED.body,
             updated_at = NOW()
+        RETURNING id
         "#,
     )
     .bind(&session.user_id)
     .bind(media_id)
     .bind(text)
-    .execute(&state.db)
+    .fetch_one(&state.db)
     .await?;
+
+    let client = state.http_client.clone();
+    tokio::spawn(async move {
+        let sidecar_url = format!("http://localhost:8080/embed-review/{}", review_id);
+        match client.post(sidecar_url).send().await {
+            Ok(res) => tracing::info!("ML Sidecar embed review for {review_id}: status={}", res.status()),
+            Err(e) => tracing::warn!("ML Sidecar not reachable during embed review (non-fatal): {e}"),
+        }
+    });
 
     Ok((StatusCode::OK, "Review saved").into_response())
 }

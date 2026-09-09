@@ -18,7 +18,7 @@ export default function SyncButton() {
     setSynced(0);
 
     try {
-      const res = await fetch(`${BACKEND}/api/sync`, {
+      const res = await fetch(`${BACKEND}/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pages: 5 }),

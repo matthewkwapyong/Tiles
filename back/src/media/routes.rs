@@ -4,11 +4,11 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use sqlx::QueryBuilder;
 use std::sync::Arc;
 
-use crate::{media::sync_popular, state::AppState};
+use crate::{auth::AuthSession, media::sync_popular, state::AppState};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Error type
@@ -129,13 +129,8 @@ pub async fn browse_media(
     if params.source.as_deref() == Some("tmdb") {
         if let Some(q) = &params.q {
             if !q.trim().is_empty() {
-                return search_tmdb_live(
-                    &*state,
-                    q.trim(),
-                    page,
-                    params.media_type.as_deref(),
-                )
-                .await;
+                return search_tmdb_live(&*state, q.trim(), page, params.media_type.as_deref())
+                    .await;
             }
         }
     }
@@ -160,7 +155,8 @@ pub async fn browse_media(
 
     if let Some(q) = &params.q {
         if !q.trim().is_empty() {
-            qb.push(" AND title ILIKE ").push_bind(format!("%{}%", q.trim()));
+            qb.push(" AND title ILIKE ")
+                .push_bind(format!("%{}%", q.trim()));
         }
     }
 
@@ -172,7 +168,9 @@ pub async fn browse_media(
 
     if let Some(genre) = &params.genre {
         if !genre.is_empty() {
-            qb.push(" AND ").push_bind(genre.clone()).push(" = ANY(genres)");
+            qb.push(" AND ")
+                .push_bind(genre.clone())
+                .push(" = ANY(genres)");
         }
     }
 
@@ -207,7 +205,12 @@ async fn search_tmdb_live(
     let (movie_genres, tv_genres, results) = tokio::try_join!(
         crate::tmdb::fetch_genre_map(&state.http_client, &state.config.tmdb_api_key, "movie"),
         crate::tmdb::fetch_genre_map(&state.http_client, &state.config.tmdb_api_key, "tv"),
-        crate::tmdb::search_multi(&state.http_client, &state.config.tmdb_api_key, query, page as u32),
+        crate::tmdb::search_multi(
+            &state.http_client,
+            &state.config.tmdb_api_key,
+            query,
+            page as u32
+        ),
     )?;
 
     let mut movie_ids: Vec<i32> = Vec::new();
@@ -216,13 +219,17 @@ async fn search_tmdb_live(
     for item in &results.results {
         match item.media_type.as_deref() {
             Some("movie") if want_movie => {
-                if let Err(e) = crate::media::upsert_from_list(&state.db, item, "movie", &movie_genres).await {
+                if let Err(e) =
+                    crate::media::upsert_from_list(&state.db, item, "movie", &movie_genres).await
+                {
                     tracing::warn!("upsert movie {}: {e}", item.id);
                 }
                 movie_ids.push(item.id);
             }
             Some("tv") if want_tv => {
-                if let Err(e) = crate::media::upsert_from_list(&state.db, item, "tv", &tv_genres).await {
+                if let Err(e) =
+                    crate::media::upsert_from_list(&state.db, item, "tv", &tv_genres).await
+                {
                     tracing::warn!("upsert tv {}: {e}", item.id);
                 }
                 tv_ids.push(item.id);
@@ -230,6 +237,24 @@ async fn search_tmdb_live(
             _ => {}
         }
     }
+
+    let combined = movie_ids.append(&mut tv_ids);
+    let val = json!({
+        "ids":combined
+    });
+    let client = state.http_client.clone();
+    tokio::spawn(async move {
+        let sidecar_url = format!("http://localhost:8080/vectorize_movie_batch");
+        match client.post(sidecar_url).json(&val).send().await {
+            Ok(res) => tracing::info!(
+                "ML Sidecar media batch vectorize for status={}",
+                res.status()
+            ),
+            Err(e) => tracing::warn!(
+                "ML Sidecar not reachable during media batch vectorize (non-fatal): {e}"
+            ),
+        }
+    });
 
     // Fetch the just-upserted rows from the DB so they have stable internal IDs
     let items = sqlx::query_as::<_, MediaItemSummary>(
@@ -301,11 +326,7 @@ pub async fn trigger_sync(
     State(state): State<Arc<AppState>>,
     body: Option<Json<SyncRequest>>,
 ) -> ApiResult<Json<SyncResponse>> {
-    let pages = body
-        .and_then(|b| b.pages)
-        .unwrap_or(5)
-        .min(20)
-        .max(1);
+    let pages = body.and_then(|b| b.pages).unwrap_or(5).min(20).max(1);
 
     tracing::info!(pages, "Starting TMDB popular sync");
 
@@ -320,4 +341,70 @@ pub async fn trigger_sync(
     tracing::info!(synced, "TMDB sync complete");
 
     Ok(Json(SyncResponse { synced }))
+}
+
+pub async fn get_user_recommedations(
+    State(state): State<Arc<AppState>>,
+    session: AuthSession,
+
+    Query(params): Query<BrowseParams>,
+) -> ApiResult<Json<BrowseResponse>> {
+    println!("{}",&session.user_id);
+    let page = params.page.unwrap_or(1).max(1);
+
+    // Default: query local DB cache
+    let offset = (page - 1) * PAGE_SIZE;
+
+    let mut qb: QueryBuilder<sqlx::Postgres> = QueryBuilder::new(
+        r#"
+       SELECT mt.id, user_id, tmdb_id, media_type, title,
+            poster_path, backdrop_path,
+            TO_CHAR(release_date, 'YYYY-MM-DD') AS release_date,
+            CAST(vote_average AS FLOAT8)         AS vote_average,
+            vote_count,
+            genres,
+            CAST(popularity AS FLOAT8)           AS popularity FROM public.recommendations r
+            left join media_items mt on mt.id = r.media_item_id
+        "#,
+    );
+    qb.push(" where user_id = ").push_bind(session.user_id);
+
+    if let Some(q) = &params.q {
+        if !q.trim().is_empty() {
+            qb.push(" AND title ILIKE ")
+                .push_bind(format!("%{}%", q.trim()));
+        }
+    }
+
+    if let Some(mt) = &params.media_type {
+        if !mt.is_empty() {
+            qb.push(" AND media_type = ").push_bind(mt.clone());
+        }
+    }
+
+    if let Some(genre) = &params.genre {
+        if !genre.is_empty() {
+            qb.push(" AND ")
+                .push_bind(genre.clone())
+                .push(" = ANY(genres)");
+        }
+    }
+
+    qb.push(" ORDER BY score DESC NULLS LAST ");
+    qb.push(" LIMIT ").push_bind(PAGE_SIZE);
+    qb.push(" OFFSET ").push_bind(offset);
+
+    println!("{:?}",qb.sql());
+    // let query = qb.build();
+
+    let items = qb
+        .build_query_as::<MediaItemSummary>()
+        .fetch_all(&state.db)
+        .await?;
+
+    Ok(Json(BrowseResponse {
+        items,
+        page,
+        page_size: PAGE_SIZE,
+    }))
 }

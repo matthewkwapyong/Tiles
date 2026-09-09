@@ -5,7 +5,7 @@ use crate::interactions::routes::{
     list_media_reviews, list_user_history, list_user_watchlist, log_watch_event,
     remove_from_watchlist, save_user_review, set_user_rating,
 };
-use crate::media::routes::{browse_media, get_media_detail, trigger_sync};
+use crate::media::routes::{browse_media, get_media_detail, get_user_recommedations, trigger_sync};
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -76,6 +76,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         // Onboarding
         .route("/onboarding/status", get(get_onboarding_status))
         .route("/onboarding/ratings", post(submit_onboarding_ratings))
+        .route("/recommedation", get(get_user_recommedations))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,

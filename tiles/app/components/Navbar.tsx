@@ -89,6 +89,18 @@ export default function Navbar({ session }: NavbarProps) {
           Discover
         </Link>
         <Link
+          href="/recommendations"
+          style={{
+            fontSize: "0.9375rem",
+            color: "var(--text-muted)",
+            textDecoration: "none",
+            fontWeight: 500,
+            transition: "color 0.15s",
+          }}
+        >
+          Recommendations
+        </Link>
+        <Link
           href="/watchlist"
           style={{
             fontSize: "0.9375rem",

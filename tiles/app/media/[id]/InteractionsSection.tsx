@@ -47,21 +47,21 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
   const loadData = useCallback(async () => {
     try {
       // 1. Rating
-      const resRating = await fetch(`${BACKEND}/api/media/${mediaId}/rating`, { credentials: "include" });
+      const resRating = await fetch(`${BACKEND}/media/${mediaId}/rating`, { credentials: "include" });
       if (resRating.ok) {
         const data = await resRating.json();
         setRating(data.rating);
       }
 
       // 2. Watchlist
-      const resWl = await fetch(`${BACKEND}/api/media/${mediaId}/watchlist`, { credentials: "include" });
+      const resWl = await fetch(`${BACKEND}/media/${mediaId}/watchlist`, { credentials: "include" });
       if (resWl.ok) {
         const data = await resWl.json();
         setInWatchlist(data.in_watchlist);
       }
 
       // 3. My Review
-      const resMyRev = await fetch(`${BACKEND}/api/media/${mediaId}/review/me`, { credentials: "include" });
+      const resMyRev = await fetch(`${BACKEND}/media/${mediaId}/review/me`, { credentials: "include" });
       if (resMyRev.ok) {
         const data: ReviewItem | null = await resMyRev.json();
         if (data) {
@@ -71,14 +71,14 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
       }
 
       // 4. Community Reviews
-      const resComRev = await fetch(`${BACKEND}/api/media/${mediaId}/reviews`, { credentials: "include" });
+      const resComRev = await fetch(`${BACKEND}/media/${mediaId}/reviews`, { credentials: "include" });
       if (resComRev.ok) {
         const data: ReviewItem[] = await resComRev.json();
         setCommunityReviews(data);
       }
-
+  
       // 5. Watch logs
-      const resLogs = await fetch(`${BACKEND}/api/media/${mediaId}/watched`, { credentials: "include" });
+      const resLogs = await fetch(`${BACKEND}/media/${mediaId}/watched`, { credentials: "include" });
       if (resLogs.ok) {
         const data: WatchLogEntry[] = await resLogs.json();
         setWatchLogs(data);
@@ -99,12 +99,12 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
 
     try {
       if (newRating === null) {
-        await fetch(`${BACKEND}/api/media/${mediaId}/rating`, {
+        await fetch(`${BACKEND}/media/${mediaId}/rating`, {
           method: "DELETE",
           credentials: "include",
         });
       } else {
-        await fetch(`${BACKEND}/api/media/${mediaId}/rating`, {
+        await fetch(`${BACKEND}/media/${mediaId}/rating`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ rating: newRating }),
@@ -123,7 +123,7 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
     setInWatchlist(nextState);
 
     try {
-      await fetch(`${BACKEND}/api/media/${mediaId}/watchlist`, {
+      await fetch(`${BACKEND}/media/${mediaId}/watchlist`, {
         method: nextState ? "POST" : "DELETE",
         credentials: "include",
       });
@@ -140,7 +140,7 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
 
     setReviewSaving(true);
     try {
-      const res = await fetch(`${BACKEND}/api/media/${mediaId}/review`, {
+      const res = await fetch(`${BACKEND}/media/${mediaId}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: myReviewText.trim() }),
@@ -150,7 +150,7 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
       if (res.ok) {
         setHasMyReview(true);
         // Refresh community reviews
-        const resComRev = await fetch(`${BACKEND}/api/media/${mediaId}/reviews`, { credentials: "include" });
+        const resComRev = await fetch(`${BACKEND}/media/${mediaId}/reviews`, { credentials: "include" });
         if (resComRev.ok) setCommunityReviews(await resComRev.json());
       }
     } catch (e) {
@@ -163,7 +163,7 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
   const handleDeleteReview = async () => {
     setReviewSaving(true);
     try {
-      const res = await fetch(`${BACKEND}/api/media/${mediaId}/review`, {
+      const res = await fetch(`${BACKEND}/media/${mediaId}/review`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -172,7 +172,7 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
         setMyReviewText("");
         setHasMyReview(false);
         // Refresh community reviews
-        const resComRev = await fetch(`${BACKEND}/api/media/${mediaId}/reviews`, { credentials: "include" });
+        const resComRev = await fetch(`${BACKEND}/media/${mediaId}/reviews`, { credentials: "include" });
         if (resComRev.ok) setCommunityReviews(await resComRev.json());
       }
     } catch (e) {
@@ -188,7 +188,7 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
     setLoggingWatch(true);
 
     try {
-      const res = await fetch(`${BACKEND}/api/media/${mediaId}/watched`, {
+      const res = await fetch(`${BACKEND}/media/${mediaId}/watched`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -202,7 +202,7 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
         setShowLogModal(false);
         setLogNotes("");
         // Reload watch logs
-        const resLogs = await fetch(`${BACKEND}/api/media/${mediaId}/watched`, { credentials: "include" });
+        const resLogs = await fetch(`${BACKEND}/media/${mediaId}/watched`, { credentials: "include" });
         if (resLogs.ok) setWatchLogs(await resLogs.json());
       }
     } catch (e) {
@@ -214,7 +214,7 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
 
   const handleDeleteWatchLog = async (logId: number) => {
     try {
-      const res = await fetch(`${BACKEND}/api/watched/${logId}`, {
+      const res = await fetch(`${BACKEND}/watched/${logId}`, {
         method: "DELETE",
         credentials: "include",
       });

@@ -5,7 +5,7 @@ use serde_json::json;
 use sqlx::PgPool;
 use std::collections::HashMap;
 
-use crate::tmdb::{fetch_genre_map, fetch_popular, TmdbDetail, TmdbListItem};
+use crate::tmdb::{TmdbDetail, TmdbListItem, fetch_genre_map, fetch_popular};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DB helpers
@@ -92,11 +92,7 @@ pub async fn upsert_from_list(
 
 /// Insert or update a media_items row from a full TMDB detail response.
 /// Returns the internal DB `id`.
-pub async fn upsert_from_detail(
-    db: &PgPool,
-    detail: &TmdbDetail,
-    media_type: &str,
-) -> Result<i64> {
+pub async fn upsert_from_detail(db: &PgPool, detail: &TmdbDetail, media_type: &str) -> Result<i64> {
     let title = detail
         .title
         .as_deref()
@@ -204,6 +200,8 @@ pub async fn sync_popular(
     )?;
 
     let mut total: u64 = 0;
+    let mut movie_ids: Vec<i32> = Vec::new();
+    let mut tv_ids: Vec<i32> = Vec::new();
 
     for page in 1..=pages {
         let (movies, shows) = tokio::try_join!(
@@ -213,12 +211,34 @@ pub async fn sync_popular(
 
         for item in &movies.results {
             upsert_from_list(db, item, "movie", &movie_genres).await?;
+            movie_ids.push(item.id);
             total += 1;
         }
         for item in &shows.results {
             upsert_from_list(db, item, "tv", &tv_genres).await?;
+            tv_ids.push(item.id);
             total += 1;
         }
+        let combined = movie_ids.append(&mut tv_ids);
+        let val = json!({
+            "ids":combined
+        });
+
+
+        tokio::spawn(async move {
+            let client = reqwest::Client::new();
+
+            let sidecar_url = format!("http://localhost:8080/vectorize_movie_batch");
+            match client.post(sidecar_url).json(&val).send().await {
+                Ok(res) => tracing::info!(
+                    "ML Sidecar media batch vectorize for status={}",
+                    res.status()
+                ),
+                Err(e) => tracing::warn!(
+                    "ML Sidecar not reachable during media batch vectorize (non-fatal): {e}"
+                ),
+            }
+        });
 
         tracing::info!(page, total, "sync_popular: page done");
     }

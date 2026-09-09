@@ -21,7 +21,7 @@ export default function HistoryClient({ initialHistory }: { initialHistory: Hist
   const handleDelete = async (logId: number) => {
     setHistory((prev) => prev.filter((item) => item.log_id !== logId));
     try {
-      await fetch(`${BACKEND}/api/watched/${logId}`, {
+      await fetch(`${BACKEND}/watched/${logId}`, {
         method: "DELETE",
         credentials: "include",
       });
