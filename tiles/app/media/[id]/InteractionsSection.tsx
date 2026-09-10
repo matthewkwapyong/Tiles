@@ -110,6 +110,13 @@ export default function InteractionsSection({ mediaId }: { mediaId: number }) {
           body: JSON.stringify({ rating: newRating }),
           credentials: "include",
         });
+
+        // Rating automatically logs a watch event; refresh watch logs
+        const resLogs = await fetch(`${BACKEND}/media/${mediaId}/watched`, { credentials: "include" });
+        if (resLogs.ok) {
+          const data: WatchLogEntry[] = await resLogs.json();
+          setWatchLogs(data);
+        }
       }
     } catch (e) {
       console.error("Rating error:", e);

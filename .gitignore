@@ -1,2 +1,3 @@
 back/.env
 /engine/__pycache__
+/engine/all-MiniLM-L6-v2

@@ -27,7 +27,9 @@ async def startup():
         min_size=10,
         max_size=50
     )
-    app.state.smodel = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    app.state.smodel = SentenceTransformer("./all-MiniLM-L6-v2")
+    # app.state.smodel = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    # app.state.smodel.save('./all-MiniLM-L6-v2')
 
 
 @app.on_event("shutdown")
@@ -97,7 +99,7 @@ async def embed_review(review_id: int):
         review = await connection.fetch("SELECT body FROM reviews WHERE id = $1", review_id)
         if not review:
             return {"error": f"Review {review_id} not found"}
-        vector = await encode_sentence(app.state.smodel, review)
+        vector = await encode_sentence(app.state.smodel, review[0]["body"])
         vector_str = str(vector.tolist()) if hasattr(vector, "tolist") else str(vector)
         await connection.execute('''
             INSERT INTO review_embeddings(review_id, embedding, model_version)

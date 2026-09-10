@@ -95,6 +95,22 @@ pub async fn set_user_rating(
     .execute(&state.db)
     .await?;
 
+    // Automatically record a watch log entry when user rates a media item (deduplicating same calendar day)
+    sqlx::query(
+        r#"
+        INSERT INTO watched_log (user_id, media_item_id, watched_at)
+        SELECT $1, $2, NOW()
+        WHERE NOT EXISTS (
+            SELECT 1 FROM watched_log
+            WHERE user_id = $1 AND media_item_id = $2 AND watched_at::date = CURRENT_DATE
+        )
+        "#,
+    )
+    .bind(&session.user_id)
+    .bind(media_id)
+    .execute(&state.db)
+    .await?;
+
     Ok((StatusCode::OK, Json(RatingResponse { rating: Some(body.rating) })).into_response())
 }
 
