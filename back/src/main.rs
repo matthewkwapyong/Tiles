@@ -44,6 +44,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(pool) => {
             info!("Connected to database successfully!");
+            // Ensure user_lists and user_list_items tables exist
+            if let Err(e) = sqlx::query(
+                r#"
+                CREATE TABLE IF NOT EXISTS user_lists (
+                    id                  BIGSERIAL   PRIMARY KEY,
+                    user_id             TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    title               TEXT        NOT NULL,
+                    description         TEXT,
+                    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS idx_user_lists_user ON user_lists (user_id, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS user_list_items (
+                    id                  BIGSERIAL   PRIMARY KEY,
+                    list_id             BIGINT      NOT NULL REFERENCES user_lists(id) ON DELETE CASCADE,
+                    media_item_id       BIGINT      NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+                    added_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (list_id, media_item_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_user_list_items_list ON user_list_items (list_id, added_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_user_list_items_media ON user_list_items (media_item_id);
+                "#,
+            )
+            .execute(&pool)
+            .await
+            {
+                tracing::warn!("Auto-migration for user_lists: {e}");
+            }
+
             pool
         }
         Err(e) => {

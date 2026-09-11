@@ -10,8 +10,8 @@ interface SearchBarProps {
 }
 
 /**
- * Search bar with Library / TMDB source toggle.
- * On submit, updates the URL with ?q=, ?source=, and the current ?type= filter.
+ * Pill-shaped glass search bar with Library / TMDB source toggle.
+ * Monochrome film-noir edition with cream focus ring.
  */
 export default function SearchBar({
   defaultValue = "",
@@ -46,54 +46,59 @@ export default function SearchBar({
   };
 
   return (
-    <div>
-      {/* Source toggle */}
+    <div style={{ marginBottom: "1.5rem" }}>
+      {/* Source Toggle Pill */}
       <div
         style={{
           display: "inline-flex",
-          borderRadius: "0.625rem",
+          borderRadius: "9999px",
           border: "1px solid var(--border-subtle)",
-          overflow: "hidden",
-          marginBottom: "0.75rem",
+          background: "rgba(242, 237, 227, 0.03)",
+          backdropFilter: "blur(12px)",
+          padding: "0.2rem",
+          marginBottom: "0.875rem",
         }}
         role="group"
         aria-label="Search source"
       >
-        {(["db", "tmdb"] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setSource(s)}
-            id={`source-toggle-${s}`}
-            style={{
-              padding: "0.3125rem 0.875rem",
-              fontSize: "0.8125rem",
-              fontWeight: 600,
-              fontFamily: "inherit",
-              border: "none",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              background:
-                source === s ? "var(--accent)" : "transparent",
-              color:
-                source === s ? "#fff" : "var(--text-muted)",
-              letterSpacing: s === "tmdb" ? "0.02em" : undefined,
-            }}
-            aria-pressed={source === s}
-          >
-            {s === "db" ? "My Library" : "TMDB"}
-          </button>
-        ))}
+        {(["db", "tmdb"] as const).map((s) => {
+          const isActive = source === s;
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setSource(s)}
+              id={`source-toggle-${s}`}
+              style={{
+                padding: "0.35rem 1rem",
+                borderRadius: "9999px",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                fontFamily: "inherit",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                background: isActive ? "var(--cream-primary)" : "transparent",
+                color: isActive ? "var(--accent-text)" : "var(--text-muted)",
+                letterSpacing: "0.04em",
+                boxShadow: isActive ? "0 0 12px rgba(242, 237, 227, 0.15)" : "none",
+              }}
+              aria-pressed={isActive}
+            >
+              {s === "db" ? "Archive" : "TMDB Live"}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Search row */}
+      {/* Search Row */}
       <form onSubmit={handleSubmit} className="search-row" role="search">
-        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          {/* Search icon */}
+        <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+          {/* Minimal Search Icon */}
           <svg
             aria-hidden="true"
-            width="16"
-            height="16"
+            width="15"
+            height="15"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -102,77 +107,58 @@ export default function SearchBar({
             strokeLinejoin="round"
             style={{
               position: "absolute",
-              left: "0.875rem",
+              left: "1.125rem",
               top: "50%",
               transform: "translateY(-50%)",
-              color: "var(--text-faint)",
+              color: "var(--text-muted)",
               pointerEvents: "none",
             }}
           >
             <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
 
           <input
             ref={inputRef}
-            id="search-input"
             type="search"
-            className="search-input"
+            defaultValue={defaultValue}
             placeholder={
               source === "tmdb"
-                ? "Search TMDB for any movie or TV show…"
-                : "Search your library…"
+                ? "Search TMDB globally (auto-saves to archive)..."
+                : "Search your local library..."
             }
-            defaultValue={defaultValue}
-            autoComplete="off"
-            style={{
-              paddingLeft: "2.5rem",
-              paddingRight: defaultValue ? "2.25rem" : "1rem",
-            }}
+            className="search-input"
+            style={{ paddingLeft: "2.75rem" }}
+            aria-label="Search media"
           />
 
           {defaultValue && (
             <button
               type="button"
               onClick={handleClear}
-              aria-label="Clear search"
               style={{
                 position: "absolute",
-                right: "0.625rem",
+                right: "1rem",
                 top: "50%",
                 transform: "translateY(-50%)",
                 background: "none",
                 border: "none",
-                color: "var(--text-faint)",
+                color: "var(--text-muted)",
                 cursor: "pointer",
-                fontSize: "1.125rem",
-                lineHeight: 1,
-                padding: 0,
+                padding: "0.25rem",
+                fontSize: "0.875rem",
               }}
+              aria-label="Clear search"
             >
-              ×
+              ✕
             </button>
           )}
         </div>
 
-        <button type="submit" className="btn-search" id="search-submit-btn">
+        <button type="submit" className="btn-search">
           Search
         </button>
       </form>
-
-      {/* Source hint */}
-      {source === "tmdb" && (
-        <p
-          style={{
-            fontSize: "0.8125rem",
-            color: "var(--text-faint)",
-            marginTop: "-0.5rem",
-            marginBottom: "0.75rem",
-          }}
-        >
-          Results are fetched live from TMDB and saved to your library.
-        </p>
-      )}
     </div>
   );
 }

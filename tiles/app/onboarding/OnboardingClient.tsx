@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MediaSummary } from "@/app/components/MediaCard";
@@ -12,6 +12,7 @@ const MIN_RATINGS = 10;
 /**
  * Compact inline star rating bar for onboarding poster cards.
  * 5 stars with half-star precision (1.0 to 10.0 rating points).
+ * Film-noir monochrome cream (#f2ede3) and warm gray.
  */
 function CardStarRating({
   value,
@@ -33,7 +34,7 @@ function CardStarRating({
 
   return (
     <div
-      style={{ display: "flex", gap: "0.2rem", alignItems: "center", justifyContent: "center" }}
+      style={{ display: "flex", gap: "0.25rem", alignItems: "center", justifyContent: "center" }}
       onMouseLeave={() => setHoverVal(null)}
     >
       {Array.from({ length: 5 }, (_, starIndex) => {
@@ -46,33 +47,39 @@ function CardStarRating({
           <div
             key={starIndex}
             onMouseMove={(e) => setHoverVal(calculateScore(e, starIndex))}
-            onClick={(e) => {
-              const score = calculateScore(e, starIndex);
+            onClick={() => {
+              const score = hoverVal !== null ? hoverVal : (starIndex + 1) * 2;
               onChange(score === value ? null : score);
             }}
             style={{
               position: "relative",
-              width: 24,
-              height: 24,
+              width: 22,
+              height: 22,
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              transition: "transform 0.1s ease",
+              transition: "transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)",
               transform: hoverVal !== null && Math.ceil(hoverVal / 2) === starIndex + 1 ? "scale(1.2)" : "scale(1)",
             }}
-            title={`Rate ${(starIndex + 1)} star${starIndex > 0 ? "s" : ""}`}
+            title={`Rate ${((starIndex + 1) * 2).toFixed(0)}/10`}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24">
+            <svg width="18" height="18" viewBox="0 0 24 24">
               <defs>
-                <linearGradient id={`card-star-half-${starIndex}`}>
-                  <stop offset="50%" stopColor="#fbbf24" />
-                  <stop offset="50%" stopColor="rgba(255,255,255,0.2)" />
+                <linearGradient id={`film-star-half-${starIndex}`}>
+                  <stop offset="50%" stopColor="var(--cream-primary)" />
+                  <stop offset="50%" stopColor="rgba(242, 237, 227, 0.15)" />
                 </linearGradient>
               </defs>
               <path
                 d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                fill={isFull ? "#fbbf24" : isHalf ? `url(#card-star-half-${starIndex})` : "rgba(255,255,255,0.2)"}
+                fill={
+                  isFull
+                    ? "var(--cream-primary)"
+                    : isHalf
+                    ? `url(#film-star-half-${starIndex})`
+                    : "rgba(242, 237, 227, 0.15)"
+                }
               />
             </svg>
           </div>
@@ -169,11 +176,11 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
         throw new Error(text || "Failed to submit onboarding ratings");
       }
 
-      // Simulate a brief recommendation building transition before redirect
+      // Transition to home
       setTimeout(() => {
         router.push("/");
         router.refresh();
-      }, 2000);
+      }, 1500);
     } catch (err) {
       console.error("Batch rating error:", err);
       setError(err instanceof Error ? err.message : "Error submitting ratings");
@@ -181,7 +188,7 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
     }
   };
 
-  // If submitting, render full-screen recommendation loading overlay
+  // If submitting, render full-screen film-noir recommendation calculation overlay
   if (submitting) {
     return (
       <div
@@ -198,20 +205,21 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
       >
         <div
           style={{
-            width: 72,
-            height: 72,
+            width: 64,
+            height: 64,
             borderRadius: "9999px",
-            border: "3px solid rgba(99,102,241,0.2)",
-            borderTopColor: "var(--accent)",
+            border: "2px solid rgba(242, 237, 227, 0.15)",
+            borderTopColor: "var(--cream-primary)",
             animation: "spin 1s linear infinite",
-            marginBottom: "1.5rem",
+            marginBottom: "2rem",
+            boxShadow: "0 0 24px rgba(242, 237, 227, 0.15)",
           }}
         />
-        <h2 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.5rem" }}>
-          Building Your Personalised Profile...
+        <h2 style={{ fontSize: "1.625rem", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--cream-primary)", marginBottom: "0.5rem" }}>
+          Developing Taste Profile...
         </h2>
-        <p style={{ color: "var(--text-muted)", maxWidth: 420 }}>
-          Calculating taste vectors based on your {ratedCount} ratings. Preparing your custom film recommendations.
+        <p style={{ color: "var(--text-muted)", maxWidth: 420, fontSize: "0.9375rem", lineHeight: 1.6 }}>
+          Calibrating collaborative vectors from your {ratedCount} ratings. Preparing your personal film archive.
         </p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -220,16 +228,17 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
 
   return (
     <div className="cinema-bg" style={{ minHeight: "100vh", paddingBottom: "6rem" }}>
-      {/* ── Sticky Progress Header ── */}
+      {/* ── Sticky Glass Progress Header ── */}
       <header
         style={{
           position: "sticky",
           top: 0,
           zIndex: 50,
-          background: "rgba(13, 15, 26, 0.85)",
-          backdropFilter: "blur(16px)",
-          borderBottom: "1px solid var(--border-subtle)",
+          background: "rgba(10, 10, 9, 0.88)",
+          backdropFilter: "blur(24px)",
+          borderBottom: "1px solid rgba(242, 237, 227, 0.12)",
           padding: "1rem 2rem",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
         }}
       >
         <div
@@ -245,28 +254,36 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
         >
           {/* Brand & Progress text */}
           <div>
-            <span style={{ fontWeight: 800, fontSize: "1.125rem", color: "var(--text-primary)" }}>
-              Welcome to Tiles
-            </span>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
-              Rate at least <strong>{MIN_RATINGS} movies or TV shows</strong> to build your taste profile.
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span style={{ fontWeight: 700, fontSize: "1.125rem", letterSpacing: "-0.02em", color: "var(--cream-primary)" }}>
+                Tiles
+              </span>
+              <span style={{ color: "var(--text-faint)" }}>—</span>
+              <span style={{ fontSize: "0.875rem", color: "var(--cream-secondary)", letterSpacing: "0.02em" }}>
+                Curate Your Taste
+              </span>
+            </div>
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0.25rem 0 0" }}>
+              Rate at least <strong style={{ color: "var(--cream-primary)" }}>{MIN_RATINGS} titles</strong> to initialize your recommendation engine.
             </p>
           </div>
 
-          {/* Progress Bar & Finish Button */}
-          <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
-            <div style={{ width: 140 }}>
+          {/* Glowing Cream Progress Bar & Continue Button */}
+          <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+            <div style={{ width: 160 }}>
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  fontSize: "0.8125rem",
-                  fontWeight: 700,
-                  marginBottom: "0.25rem",
-                  color: isReady ? "#4ade80" : "var(--text-primary)",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  marginBottom: "0.375rem",
+                  color: isReady ? "var(--cream-bright)" : "var(--text-muted)",
                 }}
               >
-                <span>{ratedCount} / {MIN_RATINGS}</span>
+                <span>{ratedCount} of {MIN_RATINGS} rated</span>
                 <span>{Math.min(100, Math.round((ratedCount / MIN_RATINGS) * 100))}%</span>
               </div>
               <div
@@ -274,19 +291,20 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
                   width: "100%",
                   height: 6,
                   borderRadius: 9999,
-                  background: "var(--bg-surface)",
+                  background: "rgba(242, 237, 227, 0.08)",
                   overflow: "hidden",
-                  border: "1px solid var(--border-subtle)",
+                  border: "1px solid rgba(242, 237, 227, 0.12)",
                 }}
               >
                 <div
                   style={{
                     height: "100%",
                     width: `${Math.min(100, (ratedCount / MIN_RATINGS) * 100)}%`,
-                    background: isReady
-                      ? "linear-gradient(90deg, #4ade80 0%, #22c55e 100%)"
-                      : "var(--accent)",
-                    transition: "width 0.3s ease",
+                    background: "var(--cream-primary)",
+                    boxShadow: isReady
+                      ? "0 0 12px rgba(242, 237, 227, 0.6)"
+                      : "0 0 8px rgba(242, 237, 227, 0.25)",
+                    transition: "width 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
                   }}
                 />
               </div>
@@ -296,34 +314,28 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
               id="finish-onboarding-btn"
               onClick={handleSubmitBatch}
               disabled={!isReady || submitting}
+              className={isReady ? "pill-btn-solid" : "pill-btn-ghost"}
               style={{
-                padding: "0.625rem 1.5rem",
-                borderRadius: "0.625rem",
-                background: isReady ? "var(--accent)" : "rgba(255,255,255,0.05)",
-                color: isReady ? "#fff" : "var(--text-faint)",
-                fontWeight: 700,
-                fontSize: "0.9375rem",
-                border: "1px solid",
-                borderColor: isReady ? "var(--accent)" : "var(--border-subtle)",
+                padding: "0.625rem 1.6rem",
+                fontSize: "0.875rem",
+                fontWeight: 600,
                 cursor: isReady ? "pointer" : "not-allowed",
-                boxShadow: isReady ? "0 0 20px var(--accent-glow)" : "none",
-                transition: "all 0.2s ease",
-                fontFamily: "inherit",
+                opacity: isReady ? 1 : 0.4,
               }}
             >
-              Finish Setup →
+              Continue to Tiles →
             </button>
           </div>
         </div>
       </header>
 
-      {/* ── Search Bar Section ── */}
-      <div style={{ maxWidth: 1400, margin: "2rem auto 1.5rem", padding: "0 2rem" }}>
+      {/* ── Pill Search Bar Section ── */}
+      <div style={{ maxWidth: 1400, margin: "2.5rem auto 1.5rem", padding: "0 2rem" }}>
         <form onSubmit={handleSearchSubmit} className="search-row" style={{ maxWidth: 540 }}>
           <input
             type="search"
             className="search-input"
-            placeholder="Can't find a film? Search titles..."
+            placeholder="Search films to rate..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -334,13 +346,21 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
       </div>
 
       {error && (
-        <div style={{ maxWidth: 1400, margin: "0 auto 1.5rem", padding: "0 2rem", color: "#f87171" }}>
-          ⚠️ {error}
+        <div
+          style={{
+            maxWidth: 1400,
+            margin: "0 auto 1.5rem",
+            padding: "0 2rem",
+            color: "var(--cream-primary)",
+            fontSize: "0.875rem",
+          }}
+        >
+          Notice: {error}
         </div>
       )}
 
-      {/* ── Rateable Media Cards Grid ── */}
-      <div className="media-grid" style={{ maxWidth: 1400, margin: "0 auto" }}>
+      {/* ── Curated Rateable Media Grid ── */}
+      <div className="media-grid" style={{ maxWidth: 1400, margin: "0 auto", padding: "0 2rem" }}>
         {items.map((item) => {
           const userRating = ratings[item.id];
           const year = item.release_date?.slice(0, 4);
@@ -348,25 +368,30 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
           return (
             <div
               key={item.id}
+              className="frosted-glass poster-hover-wrapper"
               style={{
-                borderRadius: "0.75rem",
+                borderRadius: "1rem",
                 overflow: "hidden",
-                background: "var(--bg-surface)",
-                border: `1px solid ${userRating ? "var(--accent)" : "var(--border-subtle)"}`,
-                boxShadow: userRating ? "0 0 16px var(--accent-glow)" : "none",
-                transition: "all 0.2s ease",
+                border: userRating
+                  ? "1px solid var(--cream-primary)"
+                  : "1px solid rgba(242, 237, 227, 0.12)",
+                boxShadow: userRating
+                  ? "0 0 20px rgba(242, 237, 227, 0.18)"
+                  : "inset 0 1px 0 rgba(255, 255, 255, 0.05)",
+                transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
                 display: "flex",
                 flexDirection: "column",
               }}
             >
-              {/* Poster Image */}
-              <div style={{ position: "relative", aspectRatio: "2/3", background: "var(--bg-card)" }}>
+              {/* Poster Image with monochrome desaturated filter */}
+              <div style={{ position: "relative", aspectRatio: "2/3", background: "rgba(10, 10, 9, 0.8)", overflow: "hidden" }}>
                 {item.poster_path ? (
                   <Image
                     src={`${TMDB_IMG}${item.poster_path}`}
                     alt={item.title}
                     fill
-                    sizes="180px"
+                    sizes="200px"
+                    className="poster-img"
                     style={{ objectFit: "cover" }}
                   />
                 ) : (
@@ -377,10 +402,11 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "2.5rem",
+                      fontSize: "2rem",
+                      color: "var(--cream-muted)",
                     }}
                   >
-                    🎬
+                    🎞
                   </div>
                 )}
 
@@ -391,14 +417,15 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
                       position: "absolute",
                       top: "0.5rem",
                       right: "0.5rem",
-                      background: "rgba(0,0,0,0.85)",
-                      color: "#fbbf24",
-                      padding: "0.2rem 0.5rem",
-                      borderRadius: "0.375rem",
+                      background: "rgba(10, 10, 9, 0.85)",
+                      color: "var(--cream-primary)",
+                      padding: "0.2rem 0.55rem",
+                      borderRadius: "9999px",
                       fontSize: "0.75rem",
-                      fontWeight: 800,
-                      backdropFilter: "blur(4px)",
-                      border: "1px solid rgba(251,191,36,0.3)",
+                      fontWeight: 700,
+                      backdropFilter: "blur(12px)",
+                      border: "1px solid rgba(242, 237, 227, 0.3)",
+                      boxShadow: "0 0 10px rgba(242, 237, 227, 0.2)",
                     }}
                   >
                     ★ {userRating.toFixed(1)}
@@ -407,13 +434,22 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
               </div>
 
               {/* Card Meta & Inline Star Widget */}
-              <div style={{ padding: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem", flex: 1, justifyContent: "space-between" }}>
+              <div
+                style={{
+                  padding: "0.875rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                  flex: 1,
+                  justifyContent: "space-between",
+                }}
+              >
                 <div>
                   <p
                     style={{
                       fontSize: "0.875rem",
                       fontWeight: 600,
-                      color: "var(--text-primary)",
+                      color: "var(--cream-primary)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -423,7 +459,11 @@ export default function OnboardingClient({ initialItems }: { initialItems: Media
                   >
                     {item.title}
                   </p>
-                  {year && <p style={{ fontSize: "0.75rem", color: "var(--text-faint)", margin: 0 }}>{year}</p>}
+                  {year && (
+                    <p style={{ fontSize: "0.75rem", color: "var(--text-faint)", margin: "0.15rem 0 0" }}>
+                      {year}
+                    </p>
+                  )}
                 </div>
 
                 {/* Inline Star Rating Control */}

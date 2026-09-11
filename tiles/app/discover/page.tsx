@@ -7,8 +7,8 @@ import SyncButton from "./SyncButton";
 import Link from "next/link";
 
 export const metadata = {
-  title: "Discover — Tiles",
-  description: "Browse and search popular movies and TV shows.",
+  title: "Tiles — Discover Archive",
+  description: "Browse and search cinema in the darkroom archive.",
 };
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
@@ -60,7 +60,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
   const items = data?.items ?? [];
   const hasMore = items.length === PAGE_SIZE;
 
-  // Pagination URL builder (preserves all filters)
+  // Pagination URL builder
   const pageUrl = (p: number) => {
     const ps = new URLSearchParams();
     if (q) ps.set("q", q);
@@ -83,15 +83,15 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
   const heading = q
     ? source === "tmdb"
       ? `TMDB results for "${q}"`
-      : `Library results for "${q}"`
-    : "Discover";
+      : `Archive results for "${q}"`
+    : "Discover Archive";
 
   return (
     <div className="cinema-bg" style={{ minHeight: "100vh" }}>
       <Navbar session={session} />
 
       <div className="discover-header">
-        {/* Page heading + sync button */}
+        {/* Page Heading + Sync Button */}
         <div
           style={{
             display: "flex",
@@ -99,34 +99,38 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
             justifyContent: "space-between",
             gap: "1rem",
             flexWrap: "wrap",
-            margin: "1.5rem 0 1.25rem",
+            margin: "2rem 0 1.5rem",
           }}
         >
-          <h1
-            style={{
-              fontSize: "1.75rem",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              color: "var(--text-primary)",
-              margin: 0,
-            }}
-          >
-            {heading}
-          </h1>
+          <div>
+            <h1
+              style={{
+                fontSize: "2rem",
+                fontWeight: 800,
+                letterSpacing: "-0.03em",
+                color: "var(--cream-primary)",
+                margin: 0,
+              }}
+            >
+              {heading}
+            </h1>
+            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: "0.25rem 0 0" }}>
+              Explore cataloged features and series.
+            </p>
+          </div>
 
-          {/* Sync button — client island */}
           <SyncButton />
         </div>
 
-        {/* Search bar with source toggle (client island) */}
+        {/* Pill Search Bar with Source Toggle */}
         <SearchBar defaultValue={q} defaultSource={source} mediaType={mediaType} />
 
-        {/* Type filter tabs */}
+        {/* Pill Filter Tabs (All / Movies / TV Shows — Active Tab gets cream glow border) */}
         <div className="filter-tabs" role="tablist" aria-label="Filter by type">
           {[
-            { label: "All", value: "" },
-            { label: "Movies", value: "movie" },
-            { label: "TV Shows", value: "tv" },
+            { label: "All Titles", value: "" },
+            { label: "Films", value: "movie" },
+            { label: "Series", value: "tv" },
           ].map(({ label, value }) => (
             <Link
               key={value}
@@ -144,85 +148,37 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       {/* ── Error state ── */}
       {error && (
         <div className="empty-state">
-          <span className="empty-icon">⚠️</span>
-          <p className="empty-title">Could not reach the backend</p>
+          <span className="empty-icon">⊘</span>
+          <p className="empty-title">Unable to reach archive</p>
           <p className="empty-sub">
-            Make sure the Axum server is running on port 8000 and the DB has been synced.
-          </p>
-          <p
-            className="empty-sub"
-            style={{ fontFamily: "monospace", fontSize: "0.8125rem" }}
-          >
-            {error}
+            Ensure the backend engine is running. ({error})
           </p>
         </div>
       )}
 
-      {/* ── Empty results ── */}
+      {/* ── Empty state ── */}
       {!error && items.length === 0 && (
         <div className="empty-state">
           <span className="empty-icon">🎬</span>
-          <p className="empty-title">
-            {q
-              ? source === "tmdb"
-                ? "No results from TMDB"
-                : "Nothing in your library matches"
-              : "No media in the cache yet"}
-          </p>
+          <p className="empty-title">No entries found</p>
           <p className="empty-sub">
-            {q && source === "db"
-              ? 'Try switching to "TMDB" to search the full catalogue.'
-              : !q
-              ? 'Click "Sync TMDB" to pull popular titles, or search TMDB directly.'
-              : "Try a different search term."}
+            Try adjusting your search terms or switch to "TMDB Live" above to pull new titles into the archive.
           </p>
         </div>
       )}
 
       {/* ── Media grid ── */}
       {items.length > 0 && (
-        <>
-          {/* Result count / source badge */}
-          <p
-            style={{
-              padding: "0 2rem 0.75rem",
-              maxWidth: 1400,
-              margin: "0 auto",
-              fontSize: "0.875rem",
-              color: "var(--text-faint)",
-            }}
-          >
-            {source === "tmdb" && q && (
-              <span
-                style={{
-                  display: "inline-block",
-                  marginRight: "0.5rem",
-                  padding: "0.1rem 0.5rem",
-                  borderRadius: "0.375rem",
-                  background: "rgba(99,102,241,0.12)",
-                  color: "#a5b4fc",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                }}
-              >
-                TMDB
-              </span>
-            )}
-            {items.length} title{items.length !== 1 ? "s" : ""}
-            {q ? " found" : ""}
-          </p>
-
-          <div className="media-grid" role="list" aria-label="Media items">
-            {items.map((item) => (
-              <div key={item.id} role="listitem">
-                <MediaCard item={item} />
-              </div>
-            ))}
-          </div>
-        </>
+        <div className="media-grid" role="list" aria-label="Media items">
+          {items.map((item) => (
+            <div key={item.id} role="listitem">
+              <MediaCard item={item} />
+            </div>
+          ))}
+        </div>
       )}
 
-      {/* ── Pagination ── */}
+      {/* ── Centered Pagination ── */}
       {(page > 1 || hasMore) && (
         <nav className="pagination" aria-label="Pagination">
           {page > 1 && (

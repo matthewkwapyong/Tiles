@@ -1,17 +1,17 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
-import HistoryClient from "./HistoryClient";
+import ListsClient from "./ListsClient";
 import { headers } from "next/headers";
 
 export const metadata = {
-  title: "Watch History — Tiles",
-  description: "Your log of watched movies and TV shows.",
+  title: "My Lists — Tiles",
+  description: "Your curated folders and custom movie collections.",
 };
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
-export default async function HistoryPage() {
+export default async function ListsPage() {
   const session = await auth();
   if (!session?.user) redirect("/auth/signin");
 
@@ -19,24 +19,23 @@ export default async function HistoryPage() {
   const reqHeaders = await headers();
   const cookie = reqHeaders.get("cookie") ?? "";
 
-  let history = [];
+  let lists = [];
   try {
-    const res = await fetch(`${BACKEND_URL}/history`, {
+    const res = await fetch(`${BACKEND_URL}/lists`, {
       headers: { cookie },
       cache: "no-store",
     });
     if (res.ok) {
-      history = await res.json();
+      lists = await res.json();
     }
   } catch (e) {
-    console.error("History fetch error:", e);
+    console.error("Lists fetch error:", e);
   }
 
   return (
     <div className="cinema-bg" style={{ minHeight: "100vh" }}>
       <Navbar session={session} />
-
-      <HistoryClient initialHistory={history} />
+      <ListsClient initialLists={lists} />
     </div>
   );
 }

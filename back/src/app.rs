@@ -1,9 +1,11 @@
 use crate::auth::{auth_middleware, AuthSession};
 use crate::interactions::routes::{
-    add_to_watchlist, delete_user_rating, delete_user_review, delete_watch_log_entry,
-    get_media_watch_logs, get_my_review, get_user_rating, get_watchlist_status,
-    list_media_reviews, list_user_history, list_user_watchlist, log_watch_event,
-    remove_from_watchlist, save_user_review, set_user_rating,
+    add_item_to_list, add_to_watchlist, create_user_list, delete_user_list, delete_user_rating,
+    delete_user_review, delete_watch_log_entry, get_media_lists_status, get_media_watch_logs,
+    get_my_review, get_user_list_detail, get_user_rating, get_watchlist_status,
+    list_media_reviews, list_user_history, list_user_lists, list_user_watchlist,
+    log_watch_event, remove_from_watchlist, remove_item_from_list, save_user_review,
+    set_user_rating, update_user_list,
 };
 use crate::media::routes::{browse_media, get_media_detail, get_user_recommedations, trigger_sync};
 use crate::state::AppState;
@@ -15,7 +17,7 @@ use axum::{
         method::Method,
     },
     middleware,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -66,6 +68,17 @@ pub fn app(state: Arc<AppState>) -> Router {
                 .delete(remove_from_watchlist),
         )
         .route("/watchlist", get(list_user_watchlist))
+        // Lists / Folders
+        .route("/lists", get(list_user_lists).post(create_user_list))
+        .route(
+            "/lists/{id}",
+            get(get_user_list_detail)
+                .put(update_user_list)
+                .delete(delete_user_list),
+        )
+        .route("/lists/{id}/items", post(add_item_to_list))
+        .route("/lists/{id}/items/{media_item_id}", delete(remove_item_from_list))
+        .route("/media/{id}/lists", get(get_media_lists_status))
         // Watched Log
         .route(
             "/media/{id}/watched",

@@ -354,3 +354,34 @@ CREATE TABLE IF NOT EXISTS media_review_vectors (
     model_version   TEXT,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- =============================================================================
+-- User Lists (Folders / Curated Collections)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS user_lists (
+    id                  BIGSERIAL   PRIMARY KEY,
+    user_id             TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title               TEXT        NOT NULL,
+    description         TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_lists_user ON user_lists (user_id, created_at DESC);
+
+CREATE OR REPLACE TRIGGER trg_user_lists_updated_at
+    BEFORE UPDATE ON user_lists
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS user_list_items (
+    id                  BIGSERIAL   PRIMARY KEY,
+    list_id             BIGINT      NOT NULL REFERENCES user_lists(id) ON DELETE CASCADE,
+    media_item_id       BIGINT      NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+    added_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (list_id, media_item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_list_items_list ON user_list_items (list_id, added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_list_items_media ON user_list_items (media_item_id);

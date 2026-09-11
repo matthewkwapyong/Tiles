@@ -1,13 +1,14 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
-import MediaCard, { MediaSummary } from "@/app/components/MediaCard";
+import { MediaSummary } from "@/app/components/MediaCard";
+import RecommendationsClient from "./RecommendationsClient";
 import Link from "next/link";
 import { headers } from "next/headers";
 
 export const metadata = {
-  title: "Recommendations — Tiles",
-  description: "Personalized movie and TV show recommendations.",
+  title: "Tiles — Curated Recommendations",
+  description: "Personalized film and series recommendations based on taste vectors.",
 };
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
@@ -37,7 +38,6 @@ export default async function RecommendationsPage({ searchParams }: Recommendati
   const reqHeaders = await headers();
   const cookie = reqHeaders.get("cookie") ?? "";
 
-  // Build backend URL matching Axum route /recommedation
   const url = new URL("/recommedation", BACKEND_URL);
   if (mediaType) url.searchParams.set("media_type", mediaType);
   url.searchParams.set("page", String(page));
@@ -52,7 +52,6 @@ export default async function RecommendationsPage({ searchParams }: Recommendati
     });
     if (!res.ok) throw new Error(`Backend returned ${res.status}`);
     data = await res.json();
-    console.log(data)
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error";
   }
@@ -85,20 +84,20 @@ export default async function RecommendationsPage({ searchParams }: Recommendati
             justifyContent: "space-between",
             gap: "1rem",
             flexWrap: "wrap",
-            margin: "1.5rem 0 1.25rem",
+            margin: "2rem 0 1.5rem",
           }}
         >
           <div>
             <h1
               style={{
-                fontSize: "1.75rem",
+                fontSize: "2rem",
                 fontWeight: 800,
                 letterSpacing: "-0.03em",
-                color: "var(--text-primary)",
+                color: "var(--cream-primary)",
                 margin: 0,
               }}
             >
-              Recommended For You ✨
+              Recommended For You
             </h1>
             <p
               style={{
@@ -107,17 +106,17 @@ export default async function RecommendationsPage({ searchParams }: Recommendati
                 margin: "0.25rem 0 0",
               }}
             >
-              Personalized titles selected based on your ratings and taste profile.
+              Curated selections computed from your vector taste profile and review embeddings.
             </p>
           </div>
         </div>
 
-        {/* Type filter tabs */}
+        {/* Type Filter Tabs */}
         <div className="filter-tabs" role="tablist" aria-label="Filter recommendations by type">
           {[
-            { label: "All", value: "" },
-            { label: "Movies", value: "movie" },
-            { label: "TV Shows", value: "tv" },
+            { label: "All Selections", value: "" },
+            { label: "Films", value: "movie" },
+            { label: "Series", value: "tv" },
           ].map(({ label, value }) => (
             <Link
               key={value}
@@ -135,16 +134,10 @@ export default async function RecommendationsPage({ searchParams }: Recommendati
       {/* ── Error state ── */}
       {error && (
         <div className="empty-state">
-          <span className="empty-icon">⚠️</span>
+          <span className="empty-icon">⊘</span>
           <p className="empty-title">Could not fetch recommendations</p>
           <p className="empty-sub">
             Ensure the backend server is running and your session is active.
-          </p>
-          <p
-            className="empty-sub"
-            style={{ fontFamily: "monospace", fontSize: "0.8125rem" }}
-          >
-            {error}
           </p>
         </div>
       )}
@@ -152,38 +145,31 @@ export default async function RecommendationsPage({ searchParams }: Recommendati
       {/* ── Empty results ── */}
       {!error && items.length === 0 && (
         <div className="empty-state">
-          <span className="empty-icon">✨</span>
+          <span className="empty-icon">🎬</span>
           <p className="empty-title">No recommendations yet</p>
           <p className="empty-sub">
-            Complete onboarding ratings or rate more movies to generate recommendations.
+            Rate more films in Onboarding or Discover to compute your taste vectors.
           </p>
+          <Link
+            href="/discover"
+            style={{
+              marginTop: "0.75rem",
+              padding: "0.625rem 1.5rem",
+              borderRadius: "9999px",
+              background: "var(--cream-primary)",
+              color: "var(--accent-text)",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              textDecoration: "none",
+            }}
+          >
+            Explore Titles to Rate
+          </Link>
         </div>
       )}
 
-      {/* ── Media grid ── */}
-      {items.length > 0 && (
-        <>
-          <p
-            style={{
-              padding: "0 2rem 0.75rem",
-              maxWidth: 1400,
-              margin: "0 auto",
-              fontSize: "0.875rem",
-              color: "var(--text-faint)",
-            }}
-          >
-            {items.length} recommendation{items.length !== 1 ? "s" : ""}
-          </p>
-
-          <div className="media-grid" role="list" aria-label="Recommended media items">
-            {items.map((item) => (
-              <div key={item.id} role="listitem">
-                <MediaCard item={item} />
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      {/* ── Media grid with Sort & Filter Controls ── */}
+      {items.length > 0 && <RecommendationsClient initialItems={items} />}
 
       {/* ── Pagination ── */}
       {(page > 1 || hasMore) && (

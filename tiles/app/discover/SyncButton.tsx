@@ -43,7 +43,7 @@ export default function SyncButton() {
 
   const label =
     status === "syncing"
-      ? "Syncing…"
+      ? "Syncing Archive…"
       : status === "done"
       ? `✓ Synced ${synced} titles`
       : status === "error"
@@ -58,53 +58,40 @@ export default function SyncButton() {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: "0.4375rem",
-        padding: "0.5rem 1rem",
-        borderRadius: "0.625rem",
-        fontSize: "0.875rem",
+        gap: "0.5rem",
+        padding: "0.45rem 1.125rem",
+        borderRadius: "9999px",
+        fontSize: "0.8125rem",
         fontWeight: 600,
         fontFamily: "inherit",
-        border: "1px solid",
         cursor: status === "syncing" ? "default" : "pointer",
-        transition: "all 0.15s ease",
-        // Colour based on state
+        transition: "all 0.2s ease",
         background:
           status === "done"
-            ? "rgba(34,197,94,0.12)"
+            ? "rgba(242, 237, 227, 0.08)"
             : status === "error"
-            ? "rgba(239,68,68,0.12)"
-            : "transparent",
+            ? "rgba(242, 237, 227, 0.04)"
+            : "rgba(242, 237, 227, 0.03)",
+        border: "1px solid",
         borderColor:
           status === "done"
-            ? "rgba(34,197,94,0.35)"
+            ? "var(--cream-primary)"
             : status === "error"
-            ? "rgba(239,68,68,0.35)"
+            ? "rgba(242, 237, 227, 0.3)"
             : "var(--border-subtle)",
         color:
           status === "done"
-            ? "#4ade80"
+            ? "var(--cream-primary)"
             : status === "error"
-            ? "#f87171"
+            ? "var(--text-muted)"
             : "var(--text-muted)",
+        letterSpacing: "0.02em",
         opacity: status === "syncing" ? 0.7 : 1,
+        boxShadow: status === "done" ? "0 0 12px rgba(242, 237, 227, 0.1)" : "none",
       }}
+      className="hover:text-[#f2ede3] hover:border-[rgba(242,237,227,0.25)]"
     >
       {status === "syncing" && (
-        <svg
-          aria-hidden="true"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          style={{ animation: "spin 0.9s linear infinite" }}
-        >
-          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-        </svg>
-      )}
-      {status === "idle" && (
         <svg
           aria-hidden="true"
           width="13"
@@ -112,22 +99,29 @@ export default function SyncButton() {
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          strokeWidth="2.5"
+          style={{ animation: "spin 1s linear infinite" }}
         >
-          <path d="M21 2v6h-6" />
-          <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-          <path d="M3 22v-6h6" />
-          <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
         </svg>
       )}
-      {label}
-
-      {/* Spin keyframe — injected as a global once */}
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      {status !== "syncing" && (
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+        </svg>
+      )}
+      <span>{label}</span>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </button>
   );
 }

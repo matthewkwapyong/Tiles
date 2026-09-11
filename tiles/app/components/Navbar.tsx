@@ -8,8 +8,8 @@ interface NavbarProps {
 }
 
 /**
- * Shared navigation bar — Server Component.
- * Receives the current Auth.js session as a prop.
+ * Floating Pill Navbar — Server Component.
+ * Film-noir monochrome aesthetic: cream, black, and frosted glass.
  */
 export default function Navbar({ session }: NavbarProps) {
   const { name, email, image } = session.user ?? {};
@@ -24,124 +24,128 @@ export default function Navbar({ session }: NavbarProps) {
     : (email?.[0] ?? "?").toUpperCase();
 
   return (
-    <nav className="home-nav">
-      {/* Brand + nav links */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+    <nav className="floating-pill-nav" aria-label="Main Navigation">
+      {/* Brand + Navigation Links */}
+      <div style={{ display: "flex", alignItems: "center", gap: "1.75rem" }}>
         <Link
           href="/"
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "0.5rem",
+            gap: "0.625rem",
             textDecoration: "none",
           }}
         >
+          {/* Minimal monochrome film-strip icon badge */}
           <div
             style={{
               width: 28,
               height: 28,
-              borderRadius: "0.375rem",
-              background: "var(--accent)",
+              borderRadius: "9999px",
+              background: "#171715",
+              border: "1px solid rgba(242, 237, 227, 0.25)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 0 12px var(--accent-glow)",
+              boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 12px rgba(242, 237, 227, 0.08)",
               flexShrink: 0,
             }}
             aria-hidden="true"
           >
             <svg
-              width="14"
-              height="14"
+              width="13"
+              height="13"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="white"
-              strokeWidth="2.5"
+              stroke="#f2ede3"
+              strokeWidth="2.2"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <circle cx="12" cy="12" r="10" />
-              <circle cx="12" cy="12" r="3" />
+              <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+              <line x1="7" y1="2" x2="7" y2="22" />
+              <line x1="17" y1="2" x2="17" y2="22" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <line x1="2" y1="7" x2="7" y2="7" />
+              <line x1="2" y1="17" x2="7" y2="17" />
+              <line x1="17" y1="17" x2="22" y2="17" />
+              <line x1="17" y1="7" x2="22" y2="7" />
             </svg>
           </div>
           <span
             style={{
-              fontWeight: 700,
-              fontSize: "1rem",
-              letterSpacing: "-0.02em",
-              color: "var(--text-primary)",
+              fontWeight: 800,
+              fontSize: "0.9375rem",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--cream-primary)",
             }}
           >
             Tiles
           </span>
         </Link>
 
-        <Link
-          href="/discover"
-          style={{
-            fontSize: "0.9375rem",
-            color: "var(--text-muted)",
-            textDecoration: "none",
-            fontWeight: 500,
-            transition: "color 0.15s",
-          }}
-        >
-          Discover
-        </Link>
-        <Link
-          href="/recommendations"
-          style={{
-            fontSize: "0.9375rem",
-            color: "var(--text-muted)",
-            textDecoration: "none",
-            fontWeight: 500,
-            transition: "color 0.15s",
-          }}
-        >
-          Recommendations
-        </Link>
-        <Link
-          href="/watchlist"
-          style={{
-            fontSize: "0.9375rem",
-            color: "var(--text-muted)",
-            textDecoration: "none",
-            fontWeight: 500,
-            transition: "color 0.15s",
-          }}
-        >
-          Watchlist
-        </Link>
-        <Link
-          href="/history"
-          style={{
-            fontSize: "0.9375rem",
-            color: "var(--text-muted)",
-            textDecoration: "none",
-            fontWeight: 500,
-            transition: "color 0.15s",
-          }}
-        >
-          History
-        </Link>
+        {/* Pill Nav links */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+          <Link href="/discover" className="nav-link">
+            Discover
+          </Link>
+          <Link href="/recommendations" className="nav-link">
+            Recommendations
+          </Link>
+          <Link href="/watchlist" className="nav-link">
+            Watchlist
+          </Link>
+          <Link href="/lists" className="nav-link">
+            Lists
+          </Link>
+          <Link href="/history" className="nav-link">
+            History
+          </Link>
+        </div>
       </div>
 
-      {/* User controls */}
+      {/* User Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
-        <span
-          style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}
-          aria-hidden="true"
-        >
-          {email}
-        </span>
+        {email && (
+          <span
+            style={{
+              fontSize: "0.8125rem",
+              color: "var(--text-muted)",
+              letterSpacing: "0.01em",
+            }}
+            aria-hidden="true"
+          >
+            {email}
+          </span>
+        )}
 
-        <div className="avatar" aria-label={`Avatar for ${name ?? email}`}>
+        {/* Avatar Pill */}
+        <div
+          style={{
+            width: "2rem",
+            height: "2rem",
+            borderRadius: "9999px",
+            background: "#171715",
+            border: "1px solid rgba(242, 237, 227, 0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "0.75rem",
+            fontWeight: 700,
+            color: "var(--cream-primary)",
+            overflow: "hidden",
+            flexShrink: 0,
+            boxShadow: "0 0 10px rgba(242, 237, 227, 0.05)",
+          }}
+          aria-label={`Avatar for ${name ?? email}`}
+        >
           {image ? (
             <Image
               src={image}
               alt={name ?? "User avatar"}
-              width={36}
-              height={36}
+              width={32}
+              height={32}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           ) : (
@@ -149,6 +153,7 @@ export default function Navbar({ session }: NavbarProps) {
           )}
         </div>
 
+        {/* Ghost Pill Sign Out */}
         <form
           action={async () => {
             "use server";

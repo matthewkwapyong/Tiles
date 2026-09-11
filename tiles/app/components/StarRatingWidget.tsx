@@ -30,9 +30,8 @@ const RATING_LABELS: Record<number, string> = {
 };
 
 /**
- * Premium 10-point / 5-star interactive rating control.
- * Supports half-star precision (19 steps from 1.0 to 10.0).
- * Features half-star clip rendering, hover preview, score label, and clear button.
+ * Monochrome Star Rating Control — 10-point / 5-star precision.
+ * Strict film-noir palette: cream, warm white, and charcoal matte glass.
  */
 export default function StarRatingWidget({ value, onChange }: StarRatingWidgetProps) {
   const [hoverVal, setHoverVal] = useState<number | null>(null);
@@ -40,18 +39,12 @@ export default function StarRatingWidget({ value, onChange }: StarRatingWidgetPr
 
   const activeVal = hoverVal !== null ? hoverVal : value ?? 0;
 
-  // Calculates 1.0 - 10.0 score based on mouse position across the 5 star elements
   const calculateScore = (e: React.MouseEvent<HTMLDivElement>, starIndex: number) => {
     const target = e.currentTarget;
     const rect = target.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const isLeftHalf = x < rect.width / 2;
-
-    // Each star index (0..4) corresponds to 2.0 rating points.
-    // Left half = (starIndex * 2) + 1.0
-    // Right half = (starIndex * 2) + 2.0
-    const points = isLeftHalf ? starIndex * 2 + 1.0 : starIndex * 2 + 2.0;
-    return points;
+    return isLeftHalf ? starIndex * 2 + 1.0 : starIndex * 2 + 2.0;
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>, starIndex: number) => {
@@ -61,7 +54,6 @@ export default function StarRatingWidget({ value, onChange }: StarRatingWidgetPr
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>, starIndex: number) => {
     const score = calculateScore(e, starIndex);
-    // Toggling off if clicking exact same value
     if (value === score) {
       onChange(null);
     } else {
@@ -69,24 +61,36 @@ export default function StarRatingWidget({ value, onChange }: StarRatingWidgetPr
     }
   };
 
-  const currentLabel = RATING_LABELS[activeVal] ?? (activeVal > 0 ? `${activeVal.toFixed(1)} / 10` : "No Rating");
+  const currentLabel =
+    RATING_LABELS[activeVal] ?? (activeVal > 0 ? `${activeVal.toFixed(1)} / 10` : "Unrated");
 
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: "0.625rem",
+        gap: "0.75rem",
         padding: "1.25rem",
-        borderRadius: "0.875rem",
-        background: "var(--bg-surface)",
+        borderRadius: "1rem",
+        background: "rgba(242, 237, 227, 0.03)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
         border: "1px solid var(--border-subtle)",
+        boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 32px rgba(0,0,0,0.5)",
         maxWidth: 540,
       }}
     >
       {/* Header with Title and Current Value */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)" }}>
+        <span
+          style={{
+            fontSize: "0.875rem",
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            color: "var(--cream-primary)",
+          }}
+        >
           Your Rating
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
@@ -95,61 +99,60 @@ export default function StarRatingWidget({ value, onChange }: StarRatingWidgetPr
               style={{
                 fontSize: "0.8125rem",
                 fontWeight: 700,
-                color: "#fbbf24",
-                background: "rgba(251, 191, 36, 0.12)",
-                padding: "0.2rem 0.6rem",
+                color: "var(--cream-primary)",
+                background: "rgba(242, 237, 227, 0.08)",
+                border: "1px solid rgba(242, 237, 227, 0.2)",
+                padding: "0.2rem 0.625rem",
                 borderRadius: "9999px",
-                border: "1px solid rgba(251, 191, 36, 0.25)",
+                letterSpacing: "0.02em",
+                boxShadow: "0 0 12px rgba(242, 237, 227, 0.1)",
               }}
             >
-              ★ {activeVal.toFixed(1)} / 10 ({(activeVal / 2).toFixed(1)} ★)
+              ★ {activeVal.toFixed(1)}
             </span>
           )}
           {value !== null && (
             <button
-              id="clear-rating-btn"
               type="button"
-              onClick={() => {
-                setHoverVal(null);
-                onChange(null);
-              }}
+              onClick={() => onChange(null)}
               style={{
-                background: "transparent",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: "0.375rem",
-                color: "var(--text-muted)",
+                background: "none",
+                border: "none",
+                color: "var(--text-faint)",
                 fontSize: "0.75rem",
-                fontWeight: 500,
-                padding: "0.2rem 0.5rem",
                 cursor: "pointer",
-                transition: "all 0.15s ease",
+                padding: "0.2rem 0.4rem",
+                borderRadius: "9999px",
+                transition: "color 0.15s ease",
               }}
-              title="Remove your rating"
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--cream-primary)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-faint)")}
+              title="Clear rating"
             >
-              ✕ Clear
+              Clear
             </button>
           )}
         </div>
       </div>
 
-      {/* Interactive 5-Star Row (each star has left/right half = 0.5 star / 1.0 point) */}
+      {/* 5-Star Interactive Row */}
       <div
         ref={containerRef}
-        style={{ display: "flex", gap: "0.375rem", alignItems: "center", cursor: "pointer" }}
         onMouseLeave={() => setHoverVal(null)}
-        role="slider"
-        aria-label="Rating slider"
-        aria-valuemin={1}
-        aria-valuemax={10}
-        aria-valuenow={value ?? 0}
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          alignItems: "center",
+          padding: "0.25rem 0",
+        }}
+        role="group"
+        aria-label="Rating out of 10"
       >
         {Array.from({ length: 5 }, (_, starIndex) => {
-          // Points needed for full star and half star
           const starFullPoints = (starIndex + 1) * 2;
           const starHalfPoints = starFullPoints - 1;
-
-          const isFull = activeStars(activeVal, starFullPoints);
-          const isHalf = !isFull && activeStars(activeVal, starHalfPoints);
+          const isFull = activeVal >= starFullPoints;
+          const isHalf = !isFull && activeVal >= starHalfPoints;
 
           return (
             <div
@@ -158,55 +161,63 @@ export default function StarRatingWidget({ value, onChange }: StarRatingWidgetPr
               onClick={(e) => handleClick(e, starIndex)}
               style={{
                 position: "relative",
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
+                cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 transition: "transform 0.12s ease",
-                transform: hoverVal !== null && Math.ceil(hoverVal / 2) === starIndex + 1 ? "scale(1.18)" : "scale(1)",
+                transform:
+                  hoverVal !== null && Math.ceil(hoverVal / 2) === starIndex + 1
+                    ? "scale(1.18)"
+                    : "scale(1)",
               }}
+              title={`Rate ${(starIndex + 1) * 2}/10`}
             >
               <svg
-                width="32"
-                height="32"
+                width="28"
+                height="28"
                 viewBox="0 0 24 24"
-                style={{ overflow: "visible", filter: isFull || isHalf ? "drop-shadow(0 0 8px rgba(251, 191, 36, 0.4))" : "none" }}
+                style={{
+                  filter: isFull || isHalf ? "drop-shadow(0 0 8px rgba(242, 237, 227, 0.35))" : "none",
+                  transition: "filter 0.2s ease",
+                }}
               >
                 <defs>
-                  <linearGradient id={`star-half-grad-${starIndex}`}>
-                    <stop offset="50%" stopColor="#fbbf24" />
-                    <stop offset="50%" stopColor="var(--text-faint)" />
+                  <linearGradient id={`star-half-${starIndex}`}>
+                    <stop offset="50%" stopColor="#f2ede3" />
+                    <stop offset="50%" stopColor="rgba(242, 237, 227, 0.15)" />
                   </linearGradient>
                 </defs>
                 <path
                   d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                  fill={isFull ? "#fbbf24" : isHalf ? `url(#star-half-grad-${starIndex})` : "var(--text-faint)"}
-                  stroke={isFull || isHalf ? "#f59e0b" : "transparent"}
-                  strokeWidth="0.5"
+                  fill={
+                    isFull
+                      ? "#f2ede3"
+                      : isHalf
+                      ? `url(#star-half-${starIndex})`
+                      : "rgba(242, 237, 227, 0.15)"
+                  }
+                  stroke={isFull || isHalf ? "#f2ede3" : "rgba(242, 237, 227, 0.25)"}
+                  strokeWidth="1"
+                  strokeLinejoin="round"
                 />
               </svg>
             </div>
           );
         })}
+      </div>
 
-        {/* Dynamic Label preview */}
-        <span
-          style={{
-            marginLeft: "0.75rem",
-            fontSize: "0.875rem",
-            fontWeight: 500,
-            color: hoverVal !== null ? "#fbbf24" : "var(--text-muted)",
-            fontStyle: activeVal === 0 ? "italic" : "normal",
-          }}
-        >
+      {/* Semantic Helper Label */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontStyle: "italic" }}>
           {currentLabel}
+        </span>
+        <span style={{ fontSize: "0.6875rem", color: "var(--text-faint)", letterSpacing: "0.04em" }}>
+          CLICK TO RATE (0.5 STEP)
         </span>
       </div>
     </div>
   );
-}
-
-function activeStars(activeVal: number, targetPoints: number): boolean {
-  return activeVal >= targetPoints;
 }

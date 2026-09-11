@@ -1,15 +1,15 @@
-import { auth, signOut } from "@/auth";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import Navbar from "@/app/components/Navbar";
-
 import { headers } from "next/headers";
+import Link from "next/link";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 export const metadata = {
-  title: "Home — Tiles",
-  description: "Your personal movie collection.",
+  title: "Tiles — Home",
+  description: "Your personal darkroom film archive.",
 };
 
 export default async function HomePage() {
@@ -53,47 +53,49 @@ export default async function HomePage() {
     <div className="cinema-bg" style={{ minHeight: "100vh" }}>
       <Navbar session={session} />
 
-      {/* ── Hero greeting ── */}
+      {/* ── Centered Hero Greeting ── */}
       <main
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          minHeight: "calc(100vh - 73px)",
+          minHeight: "calc(100vh - 90px)",
           padding: "2rem",
           textAlign: "center",
+          position: "relative",
         }}
       >
-        {/* Glow orb */}
+        {/* Soft Cream Radial Glow Orb */}
         <div
           aria-hidden="true"
           style={{
             position: "absolute",
-            width: 480,
-            height: 480,
+            width: 520,
+            height: 520,
             borderRadius: "9999px",
-            background: "radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)",
+            background: "radial-gradient(circle, rgba(242, 237, 227, 0.06) 0%, transparent 68%)",
             pointerEvents: "none",
           }}
         />
 
-        <div style={{ position: "relative" }}>
-          {/* User avatar — large */}
+        <div style={{ position: "relative", zIndex: 2, maxWidth: 640 }}>
+          {/* Avatar Ring with Warm-White Glow */}
           <div
             style={{
-              width: 80,
-              height: 80,
+              width: 88,
+              height: 88,
               borderRadius: "9999px",
-              background: "var(--accent)",
+              background: "#171715",
+              border: "1px solid rgba(242, 237, 227, 0.25)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontSize: "1.75rem",
               fontWeight: 700,
-              color: "#fff",
-              margin: "0 auto 1.75rem",
-              boxShadow: "0 0 40px var(--accent-glow), 0 0 0 3px rgba(99,102,241,0.2)",
+              color: "var(--cream-primary)",
+              margin: "0 auto 2rem",
+              boxShadow: "0 0 36px rgba(242, 237, 227, 0.12), 0 0 0 4px rgba(242, 237, 227, 0.05)",
               overflow: "hidden",
             }}
             aria-hidden="true"
@@ -102,8 +104,8 @@ export default async function HomePage() {
               <Image
                 src={image}
                 alt=""
-                width={80}
-                height={80}
+                width={88}
+                height={88}
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
@@ -113,26 +115,15 @@ export default async function HomePage() {
 
           <h1
             style={{
-              fontSize: "clamp(2rem, 5vw, 3.5rem)",
+              fontSize: "clamp(2.25rem, 5vw, 3.75rem)",
               fontWeight: 800,
               letterSpacing: "-0.04em",
-              color: "var(--text-primary)",
+              color: "var(--cream-primary)",
               lineHeight: 1.1,
-              marginBottom: "0.75rem",
+              marginBottom: "1rem",
             }}
           >
-            Hello,{" "}
-            <span
-              style={{
-                background: "linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              {name ?? email}
-            </span>
-            .
+            Hello, {name ?? email}.
           </h1>
 
           <p
@@ -140,48 +131,55 @@ export default async function HomePage() {
               fontSize: "1.125rem",
               color: "var(--text-muted)",
               maxWidth: 480,
-              margin: "0 auto 2.5rem",
+              margin: "0 auto 2.75rem",
+              lineHeight: 1.6,
             }}
           >
-            Your personal movie collection is ready. Start rating, reviewing, and discovering films.
+            Your private darkroom archive is ready. Explore curated cinema, catalog watches, and discover new titles.
           </p>
 
-          {/* CTA placeholder — swap with real links as you build out the app */}
-          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <a
+          {/* Two CTAs: Solid Cream Button + Ghost Outline Button */}
+          <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
+            <Link
               href="/discover"
               id="cta-discover"
               style={{
-                padding: "0.6875rem 1.5rem",
-                borderRadius: "0.625rem",
-                background: "var(--accent)",
-                color: "#fff",
-                fontWeight: 600,
+                padding: "0.8rem 2rem",
+                borderRadius: "9999px",
+                background: "var(--cream-primary)",
+                color: "#0a0a09",
+                fontWeight: 700,
                 fontSize: "0.9375rem",
                 textDecoration: "none",
-                boxShadow: "0 0 20px var(--accent-glow)",
-                transition: "all 0.15s ease",
+                boxShadow: "0 0 24px rgba(242, 237, 227, 0.2)",
+                transition: "all 0.2s ease",
+                letterSpacing: "0.01em",
               }}
+              className="hover:scale-[1.02] hover:bg-[#e8e2d5]"
             >
               Discover Films
-            </a>
-            <a
+            </Link>
+            <Link
               href="/watchlist"
               id="cta-watchlist"
               style={{
-                padding: "0.6875rem 1.5rem",
-                borderRadius: "0.625rem",
-                background: "transparent",
-                border: "1px solid var(--border-subtle)",
-                color: "var(--text-primary)",
+                padding: "0.8rem 2rem",
+                borderRadius: "9999px",
+                background: "rgba(242, 237, 227, 0.03)",
+                backdropFilter: "blur(16px)",
+                border: "1px solid rgba(242, 237, 227, 0.2)",
+                color: "var(--cream-primary)",
                 fontWeight: 600,
                 fontSize: "0.9375rem",
                 textDecoration: "none",
-                transition: "all 0.15s ease",
+                boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.06)",
+                transition: "all 0.2s ease",
+                letterSpacing: "0.01em",
               }}
+              className="hover:border-[rgba(242,237,227,0.4)] hover:bg-[rgba(242,237,227,0.08)]"
             >
               My Watchlist
-            </a>
+            </Link>
           </div>
         </div>
       </main>
