@@ -2,6 +2,7 @@ import { Session } from "next-auth";
 import { signOut } from "@/auth";
 import Image from "next/image";
 import Link from "next/link";
+import NavSearch from "./NavSearch";
 
 interface NavbarProps {
   session: Session;
@@ -107,6 +108,8 @@ export default function Navbar({ session }: NavbarProps) {
 
       {/* User Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
+        <NavSearch />
+
         {email && (
           <span
             style={{

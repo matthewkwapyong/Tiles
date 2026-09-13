@@ -127,7 +127,7 @@ export default function SearchBar({
                 ? "Search TMDB globally (auto-saves to archive)..."
                 : "Search your local library..."
             }
-            className="search-input"
+            className="search-input w-[100%]"
             style={{ paddingLeft: "2.75rem" }}
             aria-label="Search media"
           />
