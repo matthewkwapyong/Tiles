@@ -213,6 +213,7 @@ async fn search_tmdb_live(
         ),
     )?;
 
+
     let mut movie_ids: Vec<i32> = Vec::new();
     let mut tv_ids: Vec<i32> = Vec::new();
 
@@ -238,9 +239,10 @@ async fn search_tmdb_live(
         }
     }
 
-    let combined = movie_ids.append(&mut tv_ids);
+    movie_ids.append(&mut tv_ids);
+
     let val = json!({
-        "ids":combined
+        "ids":movie_ids
     });
     let client = state.http_client.clone();
     tokio::spawn(async move {
@@ -268,17 +270,16 @@ async fn search_tmdb_live(
             genres,
             CAST(popularity AS FLOAT8)           AS popularity
         FROM media_items
-        WHERE (tmdb_id = ANY($1) AND media_type = 'movie')
-           OR (tmdb_id = ANY($2) AND media_type = 'tv')
+        WHERE tmdb_id = ANY($1)
         ORDER BY popularity DESC NULLS LAST
         "#,
     )
     .bind(&movie_ids)
-    .bind(&tv_ids)
     .fetch_all(&state.db)
     .await?;
 
     let count = items.len() as i64;
+
     Ok(Json(BrowseResponse {
         items,
         page,
@@ -349,7 +350,6 @@ pub async fn get_user_recommedations(
 
     Query(params): Query<BrowseParams>,
 ) -> ApiResult<Json<BrowseResponse>> {
-    println!("{}",&session.user_id);
     let page = params.page.unwrap_or(1).max(1);
 
     // Default: query local DB cache
@@ -393,9 +393,6 @@ pub async fn get_user_recommedations(
     qb.push(" ORDER BY score DESC NULLS LAST ");
     qb.push(" LIMIT ").push_bind(PAGE_SIZE);
     qb.push(" OFFSET ").push_bind(offset);
-
-    println!("{:?}",qb.sql());
-    // let query = qb.build();
 
     let items = qb
         .build_query_as::<MediaItemSummary>()

@@ -59,16 +59,16 @@ def health_check():
 async def vectorize_movie_batch(body:Movie_Id):
     async with app.state.pool.acquire() as connection:
         for i in body.ids:
-            item = connection.fetch("SELECT * FROM media_item where tmdb_id = $1",i)[0]
-            await build_movie_vector(connection,item)
-        return "Created vectors for movie_ids " + str(body.movie_ids)
+            item = await connection.fetch("SELECT * FROM media_items where tmdb_id = $1",i)
+            if item:
+                await build_movie_vector(connection,item[0])
+        return "Created vectors for movie_ids " + str(body.ids)
 
 
 @app.get("/vectorize-movie/{movie_id}")
 async def build_movie_vectors(movie_id:int):
     async with app.state.pool.acquire() as connection:
         rows = await connection.fetch('SELECT * FROM media_items where tmdb_id = $1',movie_id)
-        print(rows[0])
         await build_movie_vector(connection,rows[0])
         return "Created vector for movie_id 34"
 

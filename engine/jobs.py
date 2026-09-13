@@ -18,6 +18,7 @@ async def get_genre_vocabulary(conn):
     return genre_cache
 
 async def build_movie_vector(conn, media_item):
+    print(media_item)
     genre_list = await get_genre_vocabulary(conn)
     existing = await conn.fetch('SELECT * FROM media_item_vectors WHERE media_item_id = $1', media_item["id"])
     if existing:
@@ -33,7 +34,7 @@ async def build_movie_vector(conn, media_item):
 
 
 
-        
+
 
 async def build_user_rating_vector(conn,user_id):
     # rows = await conn.fetch('SELECT * FROM users where id = $1',user_id)
