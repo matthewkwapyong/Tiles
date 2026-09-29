@@ -153,10 +153,22 @@ pub async fn browse_media(
         "#,
     );
 
+    // if let Some(q) = &params.q {
+    //     if !q.trim().is_empty() {
+    //         qb.push(" AND title ILIKE  ")
+    //             .push_bind(format!("%{}%", q.trim()));
+    //     }
+    // }
     if let Some(q) = &params.q {
-        if !q.trim().is_empty() {
-            qb.push(" AND title ILIKE ")
-                .push_bind(format!("%{}%", q.trim()));
+        let clean_q = q.trim();
+        if !clean_q.is_empty() {
+            qb.push(" AND (title ILIKE ");
+            qb.push_bind(format!("%{clean_q}%"));
+            qb.push(" OR title % ");
+            qb.push_bind(clean_q);
+            qb.push(" OR SIMILARITY(title, ");
+            qb.push_bind(clean_q);
+            qb.push(") > 0.25)");
         }
     }
 
@@ -182,7 +194,7 @@ pub async fn browse_media(
         .build_query_as::<MediaItemSummary>()
         .fetch_all(&state.db)
         .await?;
-
+    println!("{:#?}", items);
     Ok(Json(BrowseResponse {
         items,
         page,
@@ -212,7 +224,6 @@ async fn search_tmdb_live(
             page as u32
         ),
     )?;
-
 
     let mut movie_ids: Vec<i32> = Vec::new();
     let mut tv_ids: Vec<i32> = Vec::new();

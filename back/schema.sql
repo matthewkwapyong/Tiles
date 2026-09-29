@@ -6,6 +6,8 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS vector;          -- pgvector
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 
 
 -- =============================================================================
@@ -123,6 +125,8 @@ CREATE INDEX IF NOT EXISTS idx_media_items_cast_crew   ON media_items USING GIN 
 CREATE INDEX IF NOT EXISTS idx_media_items_popularity  ON media_items (popularity DESC);
 CREATE INDEX IF NOT EXISTS idx_media_items_release     ON media_items (release_date DESC);
 
+CREATE INDEX idx_media_items_title_trgm
+ON media_items USING GIN (title gin_trgm_ops);
 
 -- =============================================================================
 -- Ratings

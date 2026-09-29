@@ -51,10 +51,8 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
 
   try {
     const res = await fetch(url.toString(), { cache: "no-store" });
-    console.log(res)
     if (!res.ok) throw new Error(`Backend returned ${res.status}`);
     data = await res.json();
-    console.log(data)
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error";
   }
