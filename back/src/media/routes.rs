@@ -256,8 +256,9 @@ async fn search_tmdb_live(
         "ids":movie_ids
     });
     let client = state.http_client.clone();
+    let sidecar_base = state.config.sidecar_url.clone();
     tokio::spawn(async move {
-        let sidecar_url = format!("http://localhost:8080/vectorize_movie_batch");
+        let sidecar_url = format!("{}/vectorize_movie_batch", sidecar_base);
         match client.post(sidecar_url).json(&val).send().await {
             Ok(res) => tracing::info!(
                 "ML Sidecar media batch vectorize for status={}",

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -240,8 +240,9 @@ pub async fn save_user_review(
     .await?;
 
     let client = state.http_client.clone();
+    let sidecar_base = state.config.sidecar_url.clone();
     tokio::spawn(async move {
-        let sidecar_url = format!("http://localhost:8080/embed-review/{}", review_id);
+        let sidecar_url = format!("{}/embed-review/{}", sidecar_base, review_id);
         match client.post(sidecar_url).send().await {
             Ok(res) => tracing::info!("ML Sidecar embed review for {review_id}: status={}", res.status()),
             Err(e) => tracing::warn!("ML Sidecar not reachable during embed review (non-fatal): {e}"),
@@ -1024,4 +1025,506 @@ pub async fn get_media_lists_status(
 
     Ok(Json(statuses))
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Profile Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct UserRatingItem {
+    pub rating: f64,
+    pub updated_at: String,
+    pub media: MediaItemSummary,
+}
+
+/// GET /api/user/ratings — List all ratings for authenticated user
+pub async fn list_user_ratings(
+    State(state): State<Arc<AppState>>,
+    session: AuthSession,
+) -> ApiResult<Json<Vec<UserRatingItem>>> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            r.rating,
+            TO_CHAR(r.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at,
+            m.id AS media_id,
+            m.tmdb_id,
+            m.media_type,
+            m.title,
+            m.poster_path,
+            m.backdrop_path,
+            TO_CHAR(m.release_date, 'YYYY-MM-DD') AS release_date,
+            CAST(m.vote_average AS FLOAT8)         AS vote_average,
+            m.vote_count,
+            m.genres,
+            CAST(m.popularity AS FLOAT8)           AS popularity
+        FROM ratings r
+        JOIN media_items m ON m.id = r.media_item_id
+        WHERE r.user_id = $1
+        ORDER BY r.updated_at DESC
+        "#,
+        session.user_id
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let items = rows
+        .into_iter()
+        .map(|r| UserRatingItem {
+            rating: r.rating.to_string().parse::<f64>().unwrap_or(0.0),
+            updated_at: r.updated_at.unwrap_or_default(),
+            media: MediaItemSummary {
+                id: r.media_id,
+                tmdb_id: r.tmdb_id,
+                media_type: r.media_type,
+                title: r.title,
+                poster_path: r.poster_path,
+                backdrop_path: r.backdrop_path,
+                release_date: r.release_date,
+                vote_average: r.vote_average,
+                vote_count: r.vote_count,
+                genres: r.genres,
+                popularity: r.popularity,
+            },
+        })
+        .collect();
+
+    Ok(Json(items))
+}
+
+#[derive(Debug, Serialize)]
+pub struct GenrePreference {
+    pub genre_name: String,
+    pub score: f64,
+    pub count: i64,
+}
+
+/// GET /api/user/taste — Returns user's genre preference distribution
+pub async fn get_user_taste_profile(
+    State(state): State<Arc<AppState>>,
+    session: AuthSession,
+) -> ApiResult<Json<Vec<GenrePreference>>> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            g.genre_name,
+            COUNT(r.id) AS count,
+            AVG(CAST(r.rating AS FLOAT8)) AS avg_rating
+        FROM ratings r
+        JOIN media_items m ON m.id = r.media_item_id
+        CROSS JOIN UNNEST(m.genres) AS g(genre_name)
+        WHERE r.user_id = $1
+        GROUP BY g.genre_name
+        ORDER BY avg_rating DESC, count DESC
+        "#,
+        session.user_id
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let preferences = rows
+        .into_iter()
+        .map(|r| GenrePreference {
+            genre_name: r.genre_name.unwrap_or_default(),
+            score: (r.avg_rating.unwrap_or(0.0) * 10.0).round() / 10.0,
+            count: r.count.unwrap_or(0),
+        })
+        .collect();
+
+    Ok(Json(preferences))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Profile & Stats Endpoints (GET /users/{id}/*)
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn resolve_user_id(param_id: &str, session: &AuthSession) -> String {
+    if param_id == "me" {
+        session.user_id.clone()
+    } else {
+        param_id.to_string()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PaginationQuery {
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PaginatedResponse<T> {
+    pub items: Vec<T>,
+    pub total: i64,
+    pub page: i64,
+    pub limit: i64,
+    pub total_pages: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserReviewDetailItem {
+    pub id: i64,
+    pub body: String,
+    pub rating: Option<f64>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub media: MediaItemSummary,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserStatsResponse {
+    pub total_watched: i64,
+    pub total_watchlist: i64,
+    pub total_rated: i64,
+    pub total_reviewed: i64,
+    pub joined_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct GenreWeight {
+    pub genre_name: String,
+    pub weight: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TasteBreakdownResponse {
+    pub top_genres: Vec<GenreWeight>,
+    pub least_favorite_genres: Vec<GenreWeight>,
+}
+
+/// GET /users/{id}/ratings — Paginated user ratings
+pub async fn get_user_ratings_paginated(
+    State(state): State<Arc<AppState>>,
+    session: AuthSession,
+    Path(id): Path<String>,
+    Query(query): Query<PaginationQuery>,
+) -> ApiResult<Json<PaginatedResponse<UserRatingItem>>> {
+    let target_user_id = resolve_user_id(&id, &session);
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * limit;
+
+    let total = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM ratings WHERE user_id = $1"
+    )
+    .bind(&target_user_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    let rows = sqlx::query_as::<_, RawUserRatingRow>(
+        r#"
+        SELECT
+            CAST(r.rating AS FLOAT8) AS rating,
+            TO_CHAR(r.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at,
+            m.id AS media_id,
+            m.tmdb_id,
+            m.media_type,
+            m.title,
+            m.poster_path,
+            m.backdrop_path,
+            TO_CHAR(m.release_date, 'YYYY-MM-DD') AS release_date,
+            CAST(m.vote_average AS FLOAT8)         AS vote_average,
+            m.vote_count,
+            m.genres,
+            CAST(m.popularity AS FLOAT8)           AS popularity
+        FROM ratings r
+        JOIN media_items m ON m.id = r.media_item_id
+        WHERE r.user_id = $1
+        ORDER BY r.updated_at DESC
+        LIMIT $2 OFFSET $3
+        "#,
+    )
+    .bind(&target_user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+
+    let items = rows
+        .into_iter()
+        .map(|r| UserRatingItem {
+            rating: r.rating,
+            updated_at: r.updated_at,
+            media: MediaItemSummary {
+                id: r.media_id,
+                tmdb_id: r.tmdb_id,
+                media_type: r.media_type,
+                title: r.title,
+                poster_path: r.poster_path,
+                backdrop_path: r.backdrop_path,
+                release_date: r.release_date,
+                vote_average: r.vote_average,
+                vote_count: r.vote_count,
+                genres: r.genres,
+                popularity: r.popularity,
+            },
+        })
+        .collect();
+
+    let total_pages = (total as f64 / limit as f64).ceil() as i64;
+
+    Ok(Json(PaginatedResponse {
+        items,
+        total,
+        page,
+        limit,
+        total_pages,
+    }))
+}
+
+#[derive(sqlx::FromRow)]
+struct RawUserRatingRow {
+    rating: f64,
+    updated_at: String,
+    media_id: i64,
+    tmdb_id: i32,
+    media_type: String,
+    title: String,
+    poster_path: Option<String>,
+    backdrop_path: Option<String>,
+    release_date: Option<String>,
+    vote_average: Option<f64>,
+    vote_count: Option<i32>,
+    genres: Vec<String>,
+    popularity: Option<f64>,
+}
+
+/// GET /users/{id}/reviews — Paginated user reviews
+pub async fn get_user_reviews_paginated(
+    State(state): State<Arc<AppState>>,
+    session: AuthSession,
+    Path(id): Path<String>,
+    Query(query): Query<PaginationQuery>,
+) -> ApiResult<Json<PaginatedResponse<UserReviewDetailItem>>> {
+    let target_user_id = resolve_user_id(&id, &session);
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * limit;
+
+    let total = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM reviews WHERE user_id = $1"
+    )
+    .bind(&target_user_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    let rows = sqlx::query_as::<_, RawUserReviewRow>(
+        r#"
+        SELECT
+            r.id AS review_id,
+            r.body,
+            TO_CHAR(r.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+            TO_CHAR(r.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at,
+            CAST(rat.rating AS FLOAT8) AS rating,
+            m.id AS media_id,
+            m.tmdb_id,
+            m.media_type,
+            m.title,
+            m.poster_path,
+            m.backdrop_path,
+            TO_CHAR(m.release_date, 'YYYY-MM-DD') AS release_date,
+            CAST(m.vote_average AS FLOAT8)         AS vote_average,
+            m.vote_count,
+            m.genres,
+            CAST(m.popularity AS FLOAT8)           AS popularity
+        FROM reviews r
+        JOIN media_items m ON m.id = r.media_item_id
+        LEFT JOIN ratings rat ON rat.user_id = r.user_id AND rat.media_item_id = r.media_item_id
+        WHERE r.user_id = $1
+        ORDER BY r.updated_at DESC
+        LIMIT $2 OFFSET $3
+        "#,
+    )
+    .bind(&target_user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+
+    let items = rows
+        .into_iter()
+        .map(|r| UserReviewDetailItem {
+            id: r.review_id,
+            body: r.body,
+            rating: r.rating,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            media: MediaItemSummary {
+                id: r.media_id,
+                tmdb_id: r.tmdb_id,
+                media_type: r.media_type,
+                title: r.title,
+                poster_path: r.poster_path,
+                backdrop_path: r.backdrop_path,
+                release_date: r.release_date,
+                vote_average: r.vote_average,
+                vote_count: r.vote_count,
+                genres: r.genres,
+                popularity: r.popularity,
+            },
+        })
+        .collect();
+
+    let total_pages = (total as f64 / limit as f64).ceil() as i64;
+
+    Ok(Json(PaginatedResponse {
+        items,
+        total,
+        page,
+        limit,
+        total_pages,
+    }))
+}
+
+#[derive(sqlx::FromRow)]
+struct RawUserReviewRow {
+    review_id: i64,
+    body: String,
+    created_at: String,
+    updated_at: String,
+    rating: Option<f64>,
+    media_id: i64,
+    tmdb_id: i32,
+    media_type: String,
+    title: String,
+    poster_path: Option<String>,
+    backdrop_path: Option<String>,
+    release_date: Option<String>,
+    vote_average: Option<f64>,
+    vote_count: Option<i32>,
+    genres: Vec<String>,
+    popularity: Option<f64>,
+}
+
+/// GET /users/{id}/stats — Aggregate counts for user profile
+pub async fn get_user_stats(
+    State(state): State<Arc<AppState>>,
+    session: AuthSession,
+    Path(id): Path<String>,
+) -> ApiResult<Json<UserStatsResponse>> {
+    let target_user_id = resolve_user_id(&id, &session);
+
+    let row = sqlx::query_as::<_, RawUserStatsRow>(
+        r#"
+        SELECT
+            (SELECT COUNT(*) FROM watched_log WHERE user_id = $1) AS total_watched,
+            (SELECT COUNT(*) FROM watchlist WHERE user_id = $1) AS total_watchlist,
+            (SELECT COUNT(*) FROM ratings WHERE user_id = $1) AS total_rated,
+            (SELECT COUNT(*) FROM reviews WHERE user_id = $1) AS total_reviewed,
+            (SELECT TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM users WHERE id = $1) AS joined_at
+        "#,
+    )
+    .bind(&target_user_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok(Json(UserStatsResponse {
+        total_watched: row.total_watched,
+        total_watchlist: row.total_watchlist,
+        total_rated: row.total_rated,
+        total_reviewed: row.total_reviewed,
+        joined_at: row.joined_at,
+    }))
+}
+
+#[derive(sqlx::FromRow)]
+struct RawUserStatsRow {
+    total_watched: i64,
+    total_watchlist: i64,
+    total_rated: i64,
+    total_reviewed: i64,
+    joined_at: Option<String>,
+}
+
+/// GET /users/{id}/taste-breakdown — Top 5 and bottom 3 genres based on user_taste_vectors
+pub async fn get_user_taste_breakdown(
+    State(state): State<Arc<AppState>>,
+    session: AuthSession,
+    Path(id): Path<String>,
+) -> ApiResult<Response> {
+    let target_user_id = resolve_user_id(&id, &session);
+
+    let embedding_text = sqlx::query_scalar::<_, String>(
+        "SELECT embedding::text FROM user_taste_vectors WHERE user_id = $1"
+    )
+    .bind(&target_user_id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let embedding_str = match embedding_text {
+        Some(s) => s,
+        None => {
+            return Ok((
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "No taste vector found for user" })),
+            )
+                .into_response());
+        }
+    };
+
+    let weights: Vec<f64> = embedding_str
+        .trim_matches(|c| c == '[' || c == ']')
+        .split(',')
+        .filter_map(|s| s.trim().parse::<f64>().ok())
+        .collect();
+
+    #[derive(sqlx::FromRow)]
+    struct VocabRow {
+        genre_name: String,
+        position: i32,
+    }
+
+    let vocab_rows = sqlx::query_as::<_, VocabRow>(
+        "SELECT genre_name, position FROM genre_vocabulary ORDER BY position ASC"
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    if vocab_rows.is_empty() || weights.is_empty() {
+        return Ok((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "Genre vocabulary or weights unavailable" })),
+        )
+            .into_response());
+    }
+
+    let mut pairs: Vec<GenreWeight> = vocab_rows
+        .into_iter()
+        .filter_map(|r| {
+            let pos = r.position as usize;
+            if pos < weights.len() {
+                Some(GenreWeight {
+                    genre_name: r.genre_name,
+                    weight: (weights[pos] * 1000.0).round() / 1000.0,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    pairs.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap_or(std::cmp::Ordering::Equal));
+
+    let top_genres = pairs.iter().take(5).cloned().collect::<Vec<_>>();
+
+    let total_count = pairs.len();
+    let least_count = 3.min(total_count.saturating_sub(top_genres.len()));
+
+    let mut least_favorite_genres = if least_count > 0 {
+        pairs.iter().rev().take(least_count).cloned().collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    least_favorite_genres.sort_by(|a, b| a.weight.partial_cmp(&b.weight).unwrap_or(std::cmp::Ordering::Equal));
+
+    Ok((
+        StatusCode::OK,
+        Json(TasteBreakdownResponse {
+            top_genres,
+            least_favorite_genres,
+        }),
+    )
+        .into_response())
+}
+
 

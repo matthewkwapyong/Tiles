@@ -103,6 +103,9 @@ export default function Navbar({ session }: NavbarProps) {
           <Link href="/history" className="nav-link">
             History
           </Link>
+          <Link href="/profile" className="nav-link">
+            Profile
+          </Link>
         </div>
       </div>
 
@@ -124,7 +127,8 @@ export default function Navbar({ session }: NavbarProps) {
         )}
 
         {/* Avatar Pill */}
-        <div
+        <Link
+          href="/profile"
           style={{
             width: "2rem",
             height: "2rem",
@@ -140,6 +144,7 @@ export default function Navbar({ session }: NavbarProps) {
             overflow: "hidden",
             flexShrink: 0,
             boxShadow: "0 0 10px rgba(242, 237, 227, 0.05)",
+            textDecoration: "none",
           }}
           aria-label={`Avatar for ${name ?? email}`}
         >
@@ -154,7 +159,7 @@ export default function Navbar({ session }: NavbarProps) {
           ) : (
             initials
           )}
-        </div>
+        </Link>
 
         {/* Ghost Pill Sign Out */}
         <form

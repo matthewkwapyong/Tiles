@@ -55,14 +55,22 @@ async def train_model(conn):
         await conn.execute('''
             INSERT INTO user_cf_vectors (user_id, embedding, model_version)
             VALUES ($1, $2::vector, $3)
+            ON CONFLICT (user_id) DO UPDATE SET
+                embedding = EXCLUDED.embedding,
+                model_version = EXCLUDED.model_version,
+                trained_at = NOW()
         ''', user_id, str(vector), 2)
 
     for i in range(0,len(model.item_factors)):
         media_item_id = rating_matrix[2][i];
         vector = model.item_factors[i].tolist()
         await conn.execute('''
-            INSERT INTO media_cf_vectors (media_item_id,embedding, model_version)
+            INSERT INTO media_cf_vectors (media_item_id, embedding, model_version)
             VALUES ($1, $2::vector, $3)
+            ON CONFLICT (media_item_id) DO UPDATE SET
+                embedding = EXCLUDED.embedding,
+                model_version = EXCLUDED.model_version,
+                trained_at = NOW()
         ''', media_item_id, str(vector), 2)
 
 DB_DSN = os.getenv("DATABASE_URL", "postgres://postgres:matthew@localhost:5432/tiles")

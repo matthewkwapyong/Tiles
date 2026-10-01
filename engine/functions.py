@@ -92,49 +92,57 @@ async def compute_taste_vector(user_id: int, connection):
     return 1
 
 
-async def compute_user_recommendation(user_id:str,connection,content_weight=0.5, cf_weight=0.5, limit=20):
+async def compute_user_recommendation(user_id: str, connection, content_weight=0.5, cf_weight=0.5, review_weight=0.3, limit=20):
     user_taste_vector = await connection.fetchval('SELECT embedding FROM user_taste_vectors WHERE user_id = $1', user_id)
+    if not user_taste_vector:
+        print(f"No taste vector found for user {user_id}")
+        return
 
-    cf_row = await connection.fetch("SELECT user_id,embedding FROM user_cf_vectors WHERE user_id = $1",user_id)
+    candidate_limit = max(100, limit * 5)
+    cf_row = await connection.fetchrow("SELECT user_id, embedding FROM user_cf_vectors WHERE user_id = $1", user_id)
+
     if cf_row:
         cf_vector = cf_row["embedding"]
-        rows = await connection.fetch(
-                """
-                SELECT
-                    miv.media_item_id,
-                    miv.embedding <=> $1::vector AS content_distance,
-                    mcv.embedding <=> $2::vector AS cf_distance
-                FROM media_item_vectors miv
-                JOIN media_cf_vectors mcv ON mcv.media_item_id = miv.media_item_id
-                WHERE miv.media_item_id NOT IN (
-                    SELECT media_item_id FROM ratings WHERE user_id = $3
-                )
-                """,
-                str(user_taste_vector), str(cf_vector), user_id
-            )
-        scores = {}
-        for row in rows:
-            content_similarity = 1 - (row["content_distance"] / 2)
-            cf_similarity = 1 - (row["cf_distance"] / 2)
-            final_score = (content_weight * content_similarity) + (cf_weight * cf_similarity)
-            scores[row["media_item_id"]] = {
-                "content": 1 - (row["content_distance"] / 2),
-                "cf": 1 - (row["cf_distance"] / 2),
-                "review": None,
-            }
-    else:
-        # Step 3b: cold start — no cf vector yet, content-based score only
         rows = await connection.fetch(
             """
             SELECT
                 miv.media_item_id,
-                miv.embedding <=> $1::vector AS content_distance
+                (miv.embedding <=> $1::vector) AS content_distance,
+                (mcv.embedding <=> $2::vector) AS cf_distance
+            FROM media_item_vectors miv
+            JOIN media_cf_vectors mcv ON mcv.media_item_id = miv.media_item_id
+            WHERE miv.media_item_id NOT IN (
+                SELECT media_item_id FROM ratings WHERE user_id = $3
+            )
+            ORDER BY ($4 * (miv.embedding <=> $1::vector) + $5 * (mcv.embedding <=> $2::vector)) ASC
+            LIMIT $6
+            """,
+            str(user_taste_vector), str(cf_vector), user_id, content_weight, cf_weight, candidate_limit
+        )
+        scores = {}
+        for row in rows:
+            content_similarity = 1 - (row["content_distance"] / 2)
+            cf_similarity = 1 - (row["cf_distance"] / 2)
+            scores[row["media_item_id"]] = {
+                "content": content_similarity,
+                "cf": cf_similarity,
+                "review": None,
+            }
+    else:
+        # Cold start — content-based score ordered directly in SQL
+        rows = await connection.fetch(
+            """
+            SELECT
+                miv.media_item_id,
+                (miv.embedding <=> $1::vector) AS content_distance
             FROM media_item_vectors miv
             WHERE miv.media_item_id NOT IN (
                 SELECT media_item_id FROM ratings WHERE user_id = $2
             )
+            ORDER BY (miv.embedding <=> $1::vector) ASC
+            LIMIT $3
             """,
-            str(user_taste_vector), user_id
+            str(user_taste_vector), user_id, candidate_limit
         )
         scores = {}
         for row in rows:
@@ -144,14 +152,14 @@ async def compute_user_recommendation(user_id:str,connection,content_weight=0.5,
                 "review": None,
             }
 
-    review_row = await conn.fetchrow(
-         "SELECT embedding FROM user_review_vectors WHERE user_id = $1", user_id
-     )
-    if review_row is not None:
+    review_row = await connection.fetchrow(
+        "SELECT embedding FROM user_review_vectors WHERE user_id = $1", user_id
+    )
+    if review_row is not None and scores:
         review_vector = review_row["embedding"]
         review_rows = await connection.fetch(
             """
-            SELECT media_item_id, embedding <=> $1::vector AS review_distance
+            SELECT media_item_id, (embedding <=> $1::vector) AS review_distance
             FROM media_review_vectors
             WHERE media_item_id = ANY($2::bigint[])
             """,
@@ -160,7 +168,6 @@ async def compute_user_recommendation(user_id:str,connection,content_weight=0.5,
         for row in review_rows:
             if row["media_item_id"] in scores:
                 scores[row["media_item_id"]]["review"] = 1 - (row["review_distance"] / 2)
-
 
     scored = []
     for media_item_id, s in scores.items():
@@ -179,13 +186,12 @@ async def compute_user_recommendation(user_id:str,connection,content_weight=0.5,
 
         scored.append((media_item_id, final_score, s["content"], s["cf"], s["review"]))
 
-
     scored.sort(key=lambda x: x[1], reverse=True)
     top_results = scored[:limit]
 
-    print("top results:",top_results)
+    print("Top recommendation results:", top_results)
 
-    # Step 5: write into the recommendations cache table
+    # Step 5: write into recommendations cache table
     for media_item_id, final_score, content_score, cf_score, review_score in top_results:
         await connection.execute(
             """
@@ -193,8 +199,9 @@ async def compute_user_recommendation(user_id:str,connection,content_weight=0.5,
                 (user_id, media_item_id, score, content_score, cf_score, review_score)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id, media_item_id)
-            DO UPDATE SET score = $3, content_score = $4, cf_score = $5,
-                           review_score = $6, generated_at = NOW()
+            DO UPDATE SET score = EXCLUDED.score, content_score = EXCLUDED.content_score,
+                          cf_score = EXCLUDED.cf_score, review_score = EXCLUDED.review_score,
+                          generated_at = NOW()
             """,
             user_id, media_item_id, final_score, content_score, cf_score, review_score
         )
@@ -202,62 +209,74 @@ async def compute_user_recommendation(user_id:str,connection,content_weight=0.5,
 async def encode_sentence(model,sentence):
     return model.encode(sentence)
 
-async def per_user_review(connection,user_id):
+async def per_user_review(connection, user_id: str):
     data = await connection.fetch("""
-        select * from review_embeddings re
-        left join reviews rw on re.review_id = rw.id
-        left join ratings r on r.user_id = rw.user_id
-        where user_id = $1
-        """,user_id)
+        SELECT re.embedding, r.rating
+        FROM review_embeddings re
+        JOIN reviews r ON r.id = re.review_id
+        WHERE r.user_id = $1
+        """, user_id)
+
+    if not data:
+        return 0
 
     midpoint = 5.5
-    vector = np.fromstring(data[0]["embedding"].strip('[]'), sep=',')
-    vector_length = len(vector)
+    first_emb = np.fromstring(data[0]["embedding"].strip('[]'), sep=',')
+    vector_length = len(first_emb)
     weighted_sum = [0.0] * vector_length
     total_abs_weight = 0.0
 
     for row in data:
-        rating = float(row["rating"])
+        rating = float(row["rating"]) if row["rating"] is not None else 5.5
         emb = np.fromstring(row["embedding"].strip('[]'), sep=',')
         weight = rating - midpoint
         for i in range(vector_length):
             weighted_sum[i] += emb[i] * weight
         total_abs_weight += abs(weight)
-    taste_vector = [float(value / total_abs_weight) for value in weighted_sum]
+
+    if total_abs_weight == 0:
+        taste_vector = [0.0] * vector_length
+    else:
+        taste_vector = [float(value / total_abs_weight) for value in weighted_sum]
+
     await connection.execute('''
-        INSERT INTO user_review_vectors (user_id, embedding, vocabulary_version,model_version)
-        VALUES ($1, $2::vector, $3,$4) ON CONFLICT (user_id)
-        DO UPDATE SET embedding = $2::vector, updated_at = NOW()
-    ''', user_id, str(taste_vector), '1',"all-MiniLM-L6-v2")
+        INSERT INTO user_review_vectors (user_id, embedding, model_version)
+        VALUES ($1, $2::vector, $3)
+        ON CONFLICT (user_id)
+        DO UPDATE SET embedding = EXCLUDED.embedding, updated_at = NOW()
+    ''', user_id, str(taste_vector), "all-MiniLM-L6-v2")
     return 1
 
-async def per_movie_review(connection,media_item_id):
-    # What it needs: for a given media_item_id, gather every review written about it (by any user), and average those embeddings —
-    # this one is a plain average, not rating-weighted, since it's meant to represent "what people in general say about this
-    # movie," not any one person's taste.
+async def per_movie_review(connection, media_item_id: int):
     data = await connection.fetch("""
-        select * from review_embeddings re
-        left join reviews rw on re.review_id = rw.id
-        where media_item_id = $1
-        """,media_item_id)
+        SELECT re.embedding
+        FROM review_embeddings re
+        JOIN reviews r ON r.id = re.review_id
+        WHERE r.media_item_id = $1
+        """, media_item_id)
 
-    if data:
-        vector = np.fromstring(data[0]["embedding"].strip('[]'), sep=',')
-        vector_length = len(vector)
-        weighted_sum = [0.0] * vector_length
-        total_reviews = 0
-        for i in data:
-            emb = np.fromstring(i["embedding"].strip('[]'), sep=',')
-            for j in range(vector_length):
-                weighted_sum[j] += emb[j]
-            total_reviews += i["weight"]
-        movie_vector = [float(value / total_reviews) for value in weighted_sum]
-        await connection.execute('''
-            INSERT INTO movie_review_vectors (media_item_id, embedding, vocabulary_version,model_version)
-            VALUES ($1, $2::vector, $3,$4) ON CONFLICT (media_item_id)
-            DO UPDATE SET embedding = $2::vector, updated_at = NOW()
-        ''', media_item_id, str(movie_vector), '1',"all-MiniLM-L6-v2")
+    if not data:
+        return 0
+
+    first_emb = np.fromstring(data[0]["embedding"].strip('[]'), sep=',')
+    vector_length = len(first_emb)
+    weighted_sum = [0.0] * vector_length
+    total_reviews = len(data)
+
+    for row in data:
+        emb = np.fromstring(row["embedding"].strip('[]'), sep=',')
+        for j in range(vector_length):
+            weighted_sum[j] += emb[j]
+
+    movie_vector = [float(value / total_reviews) for value in weighted_sum]
+    await connection.execute('''
+        INSERT INTO media_review_vectors (media_item_id, embedding, model_version)
+        VALUES ($1, $2::vector, $3)
+        ON CONFLICT (media_item_id)
+        DO UPDATE SET embedding = EXCLUDED.embedding, updated_at = NOW()
+    ''', media_item_id, str(movie_vector), "all-MiniLM-L6-v2")
     return 1
+
 
 
 

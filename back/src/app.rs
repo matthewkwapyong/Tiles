@@ -2,10 +2,11 @@ use crate::auth::{auth_middleware, AuthSession};
 use crate::interactions::routes::{
     add_item_to_list, add_to_watchlist, create_user_list, delete_user_list, delete_user_rating,
     delete_user_review, delete_watch_log_entry, get_media_lists_status, get_media_watch_logs,
-    get_my_review, get_user_list_detail, get_user_rating, get_watchlist_status,
-    list_media_reviews, list_user_history, list_user_lists, list_user_watchlist,
-    log_watch_event, remove_from_watchlist, remove_item_from_list, save_user_review,
-    set_user_rating, update_user_list,
+    get_my_review, get_user_list_detail, get_user_rating, get_user_ratings_paginated,
+    get_user_reviews_paginated, get_user_stats, get_user_taste_breakdown, get_user_taste_profile,
+    get_watchlist_status, list_media_reviews, list_user_history, list_user_lists,
+    list_user_ratings, list_user_watchlist, log_watch_event, remove_from_watchlist,
+    remove_item_from_list, save_user_review, set_user_rating, update_user_list,
 };
 use crate::media::routes::{browse_media, get_media_detail, get_user_recommedations, trigger_sync};
 use crate::state::AppState;
@@ -85,7 +86,14 @@ pub fn app(state: Arc<AppState>) -> Router {
             get(get_media_watch_logs).post(log_watch_event),
         )
         .route("/watched/{log_id}", delete(delete_watch_log_entry))
+        // History & Profile
         .route("/history", get(list_user_history))
+        .route("/user/ratings", get(list_user_ratings))
+        .route("/user/taste", get(get_user_taste_profile))
+        .route("/users/{id}/ratings", get(get_user_ratings_paginated))
+        .route("/users/{id}/reviews", get(get_user_reviews_paginated))
+        .route("/users/{id}/stats", get(get_user_stats))
+        .route("/users/{id}/taste-breakdown", get(get_user_taste_breakdown))
         // Onboarding
         .route("/onboarding/status", get(get_onboarding_status))
         .route("/onboarding/ratings", post(submit_onboarding_ratings))

@@ -4,7 +4,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use tracing_subscriber::fmt::format;
 use std::sync::Arc;
 
 use crate::{
@@ -97,90 +96,122 @@ pub async fn get_curated_onboarding(
         }
     }
 
-    // Query curated items joined with media_items
-    let items = sqlx::query_as::<_, MediaItemSummary>(
-        r#"
-        SELECT
-            m.id,
-            m.tmdb_id,
-            m.media_type,
-            m.title,
-            m.poster_path,
-            m.backdrop_path,
-            TO_CHAR(m.release_date, 'YYYY-MM-DD') AS release_date,
-            CAST(m.vote_average AS FLOAT8)         AS vote_average,
-            m.vote_count,
-            m.genres,
-            CAST(m.popularity AS FLOAT8)           AS popularity
-        FROM curated_onboarding_items c
-        JOIN media_items m ON m.tmdb_id = c.tmdb_id AND m.media_type = c.media_type
-        ORDER BY c.display_order ASC
-        "#,
-    )
-    .fetch_all(&state.db)
-    .await?;
-
-    // If some curated items are missing from media_items, sync them from TMDB
-    if items.len() < 30 {
-        let missing_curated = sqlx::query!(
+        // Backfill media_item_id if any rows are missing it
+        let _ = sqlx::query(
             r#"
-            SELECT c.tmdb_id, c.media_type
+            UPDATE curated_onboarding_items c
+            SET media_item_id = m.id
+            FROM media_items m
+            WHERE c.media_item_id IS NULL AND c.tmdb_id = m.tmdb_id AND c.media_type = m.media_type
+            "#,
+        )
+        .execute(&state.db)
+        .await;
+
+        // Query curated active items joined with media_items
+        let items = sqlx::query_as::<_, MediaItemSummary>(
+            r#"
+            SELECT
+                m.id,
+                m.tmdb_id,
+                m.media_type,
+                m.title,
+                m.poster_path,
+                m.backdrop_path,
+                TO_CHAR(m.release_date, 'YYYY-MM-DD') AS release_date,
+                CAST(m.vote_average AS FLOAT8)         AS vote_average,
+                m.vote_count,
+                m.genres,
+                CAST(m.popularity AS FLOAT8)           AS popularity
             FROM curated_onboarding_items c
-            LEFT JOIN media_items m ON m.tmdb_id = c.tmdb_id AND m.media_type = c.media_type
-            WHERE m.id IS NULL
-            "#
+            JOIN media_items m ON (c.media_item_id IS NOT NULL AND m.id = c.media_item_id)
+                               OR (c.media_item_id IS NULL AND m.tmdb_id = c.tmdb_id AND m.media_type = c.media_type)
+            WHERE c.is_active = TRUE
+            ORDER BY c.display_order ASC
+            "#,
         )
         .fetch_all(&state.db)
         .await?;
 
-        if !missing_curated.is_empty() {
-            let (movie_genres, tv_genres) = tokio::join!(
-                crate::tmdb::fetch_genre_map(&state.http_client, &state.config.tmdb_api_key, "movie"),
-                crate::tmdb::fetch_genre_map(&state.http_client, &state.config.tmdb_api_key, "tv"),
-            );
-
-            let movie_map = movie_genres.unwrap_or_default();
-            let tv_map = tv_genres.unwrap_or_default();
-
-            for row in missing_curated {
-                if let Ok(detail) = crate::tmdb::fetch_detail(
-                    &state.http_client,
-                    &state.config.tmdb_api_key,
-                    &row.media_type,
-                    row.tmdb_id,
-                )
-                .await
-                {
-                    let _ = crate::media::upsert_from_detail(&state.db, &detail, &row.media_type).await;
-                }
+        // If some curated items are missing from media_items, sync them from TMDB
+        if items.len() < 30 {
+            #[derive(sqlx::FromRow)]
+            struct MissingCuratedRow {
+                tmdb_id: i32,
+                media_type: String,
             }
 
-            // Re-query after sync
-            let refreshed_items = sqlx::query_as::<_, MediaItemSummary>(
+            let missing_curated = sqlx::query_as::<_, MissingCuratedRow>(
                 r#"
-                SELECT
-                    m.id,
-                    m.tmdb_id,
-                    m.media_type,
-                    m.title,
-                    m.poster_path,
-                    m.backdrop_path,
-                    TO_CHAR(m.release_date, 'YYYY-MM-DD') AS release_date,
-                    CAST(m.vote_average AS FLOAT8)         AS vote_average,
-                    m.vote_count,
-                    m.genres,
-                    CAST(m.popularity AS FLOAT8)           AS popularity
+                SELECT c.tmdb_id, c.media_type
                 FROM curated_onboarding_items c
-                JOIN media_items m ON m.tmdb_id = c.tmdb_id AND m.media_type = c.media_type
-                ORDER BY c.display_order ASC
-                "#,
+                LEFT JOIN media_items m ON (c.media_item_id IS NOT NULL AND m.id = c.media_item_id)
+                                        OR (c.media_item_id IS NULL AND m.tmdb_id = c.tmdb_id AND m.media_type = c.media_type)
+                WHERE c.is_active = TRUE AND m.id IS NULL
+                "#
             )
             .fetch_all(&state.db)
             .await?;
 
-            return Ok(Json(refreshed_items));
+            if !missing_curated.is_empty() {
+                let (movie_genres, tv_genres) = tokio::join!(
+                    crate::tmdb::fetch_genre_map(&state.http_client, &state.config.tmdb_api_key, "movie"),
+                    crate::tmdb::fetch_genre_map(&state.http_client, &state.config.tmdb_api_key, "tv"),
+                );
+
+                let _movie_map = movie_genres.unwrap_or_default();
+                let _tv_map = tv_genres.unwrap_or_default();
+
+                for row in missing_curated {
+                    if let Ok(detail) = crate::tmdb::fetch_detail(
+                        &state.http_client,
+                        &state.config.tmdb_api_key,
+                        &row.media_type,
+                        row.tmdb_id,
+                    )
+                    .await
+                    {
+                        if let Ok(media_id) = crate::media::upsert_from_detail(&state.db, &detail, &row.media_type).await {
+                            let _ = sqlx::query(
+                                "UPDATE curated_onboarding_items SET media_item_id = $1 WHERE tmdb_id = $2 AND media_type = $3"
+                            )
+                            .bind(media_id)
+                            .bind(row.tmdb_id)
+                            .bind(&row.media_type)
+                            .execute(&state.db)
+                            .await;
+                        }
+                    }
+                }
+
+                // Re-query after sync
+                let refreshed_items = sqlx::query_as::<_, MediaItemSummary>(
+                    r#"
+                    SELECT
+                        m.id,
+                        m.tmdb_id,
+                        m.media_type,
+                        m.title,
+                        m.poster_path,
+                        m.backdrop_path,
+                        TO_CHAR(m.release_date, 'YYYY-MM-DD') AS release_date,
+                        CAST(m.vote_average AS FLOAT8)         AS vote_average,
+                        m.vote_count,
+                        m.genres,
+                        CAST(m.popularity AS FLOAT8)           AS popularity
+                    FROM curated_onboarding_items c
+                    JOIN media_items m ON (c.media_item_id IS NOT NULL AND m.id = c.media_item_id)
+                                       OR (c.media_item_id IS NULL AND m.tmdb_id = c.tmdb_id AND m.media_type = c.media_type)
+                    WHERE c.is_active = TRUE
+                    ORDER BY c.display_order ASC
+                    "#,
+                )
+                .fetch_all(&state.db)
+                .await?;
+
+                return Ok(Json(refreshed_items));
+            }
         }
-    }
 
     Ok(Json(items))
 }
@@ -259,8 +290,9 @@ pub async fn submit_onboarding_ratings(
     // 4. Fire-and-forget async task to notify Python ML sidecar
     let user_id = session.user_id.clone();
     let client = state.http_client.clone();
+    let sidecar_base = state.config.sidecar_url.clone();
     tokio::spawn(async move {
-        let sidecar_url = format!("http://localhost:8080/complete_onboarding/{}",user_id);
+        let sidecar_url = format!("{}/complete_onboarding/{}", sidecar_base, user_id);
         match client.get(sidecar_url).send().await {
             Ok(res) => tracing::info!("ML Sidecar onboarding for {user_id}: status={}", res.status()),
             Err(e) => tracing::warn!("ML Sidecar not reachable during onboarding (non-fatal): {e}"),

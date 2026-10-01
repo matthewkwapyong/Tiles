@@ -1,41 +1,37 @@
-from fastapi import FastAPI
+import os
 import asyncio
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 import asyncpg
-import datetime
-from jobs import build_movie_vector
-from functions import compute_taste_vector, compute_user_recommendation, encode_sentence
-
-
 import numpy as np
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
-app = FastAPI()
+from jobs import build_movie_vector
+from functions import compute_taste_vector, compute_user_recommendation, encode_sentence
 
+DB_DSN = os.getenv("DATABASE_URL", "postgres://postgres:matthew@localhost:5432/tiles")
 
 class Movie_Id(BaseModel):
-    ids:list[int]
+    ids: list[int]
 
 class User_Id(BaseModel):
-    user_id:str
+    user_id: str
 
-@app.on_event("startup")
-async def startup():
-    # Attach the pool to the app state when the server starts
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Attach pool and model to app state on startup
     app.state.pool = await asyncpg.create_pool(
-        dsn='postgres://postgres:matthew@localhost:5432/tiles',
+        dsn=DB_DSN,
         min_size=10,
         max_size=50
     )
     app.state.smodel = SentenceTransformer("./all-MiniLM-L6-v2")
-    # app.state.smodel = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-    # app.state.smodel.save('./all-MiniLM-L6-v2')
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    # Close the pool when the server stops
+    yield
+    # Clean up pool on shutdown
     await app.state.pool.close()
+
+app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 async def root():
@@ -65,12 +61,15 @@ async def vectorize_movie_batch(body:Movie_Id):
         return "Created vectors for movie_ids " + str(body.ids)
 
 
+@app.post("/vectorize-movie/{movie_id}")
 @app.get("/vectorize-movie/{movie_id}")
-async def build_movie_vectors(movie_id:int):
+async def vectorize_single_movie(movie_id: int):
     async with app.state.pool.acquire() as connection:
-        rows = await connection.fetch('SELECT * FROM media_items where tmdb_id = $1',movie_id)
-        await build_movie_vector(connection,rows[0])
-        return "Created vector for movie_id 34"
+        rows = await connection.fetch("SELECT * FROM media_items WHERE id = $1 OR tmdb_id = $1 LIMIT 1", movie_id)
+        if rows:
+            await build_movie_vector(connection, rows[0])
+            return {"message": f"Created vector for movie {movie_id}"}
+        return {"error": f"Movie {movie_id} not found"}
 
 @app.get("/build_user_taste_vector/{user_id}")
 async def build_user_taste_vector(user_id:str):

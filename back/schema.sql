@@ -36,12 +36,21 @@ CREATE TABLE IF NOT EXISTS curated_onboarding_items (
     id            BIGSERIAL PRIMARY KEY,
     tmdb_id       INTEGER NOT NULL,
     media_type    TEXT NOT NULL CHECK (media_type IN ('movie', 'tv')),
+    media_item_id BIGINT REFERENCES media_items(id) ON DELETE CASCADE,
     display_order INTEGER NOT NULL DEFAULT 0,
+    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
     UNIQUE (tmdb_id, media_type)
 );
 
 CREATE INDEX IF NOT EXISTS idx_curated_onboarding_tmdb ON curated_onboarding_items (tmdb_id, media_type);
 CREATE INDEX IF NOT EXISTS idx_curated_onboarding_display ON curated_onboarding_items (display_order ASC);
+ALTER TABLE curated_onboarding_items ADD COLUMN IF NOT EXISTS media_item_id BIGINT REFERENCES media_items(id) ON DELETE CASCADE;
+ALTER TABLE curated_onboarding_items ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+UPDATE curated_onboarding_items c
+SET media_item_id = m.id
+FROM media_items m
+WHERE c.tmdb_id = m.tmdb_id AND c.media_type = m.media_type AND c.media_item_id IS NULL;
+
 
 CREATE TABLE IF NOT EXISTS accounts (
     id                    TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -326,17 +335,20 @@ CREATE INDEX IF NOT EXISTS idx_media_item_vectors_vec
 
 CREATE TABLE IF NOT EXISTS user_cf_vectors (
     user_id         TEXT        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    embedding       vector(50)  NOT NULL,   -- dimension = your chosen factor count
-    model_version   INTEGER     NOT NULL DEFAULT 1,  -- bump on full retrain
+    embedding       vector(20)  NOT NULL,   -- dimension = 20 factor ALS count
+    model_version   INTEGER     NOT NULL DEFAULT 2,  -- bump on full retrain
     trained_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS media_cf_vectors (
     media_item_id   BIGINT      PRIMARY KEY REFERENCES media_items(id) ON DELETE CASCADE,
-    embedding       vector(50)  NOT NULL,
-    model_version   INTEGER     NOT NULL DEFAULT 1,
+    embedding       vector(20)  NOT NULL,
+    model_version   INTEGER     NOT NULL DEFAULT 2,
     trained_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE user_cf_vectors ALTER COLUMN embedding TYPE vector(20);
+ALTER TABLE media_cf_vectors ALTER COLUMN embedding TYPE vector(20);
 
 CREATE INDEX IF NOT EXISTS idx_media_cf_vectors_vec
     ON media_cf_vectors USING ivfflat (embedding vector_cosine_ops)

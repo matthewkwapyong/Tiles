@@ -25,11 +25,13 @@
   --border-bright:  rgba(242, 237, 227, 0.45);
   --highlight-top:  inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
-  /* Monochrome Accents (Strictly Cream/Black) */
+  /* Monochrome & Dusk Accents */
   --accent:         #f2ede3;
   --accent-hover:   #e8e2d5;
   --accent-text:    #0a0a09;
   --accent-glow:    rgba(242, 237, 227, 0.15);
+  --accent-gold:    #d4af37;
+  --accent-green:   #1D9E75;
 
   --background:     var(--bg-base);
   --foreground:     var(--text-primary);
@@ -40,6 +42,10 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+.font-serif-heading {
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */

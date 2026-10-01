@@ -178,6 +178,18 @@ pub async fn upsert_from_detail(db: &PgPool, detail: &TmdbDetail, media_type: &s
     .bind(detail.vote_count)
     .fetch_one(db)
     .await?;
+    let media_item_id = row;
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        let sidecar_base = std::env::var("SIDECAR_URL")
+            .or_else(|_| std::env::var("PYTHON_SIDECAR_URL"))
+            .unwrap_or_else(|_| "http://localhost:8080".to_string());
+        let sidecar_url = format!("{sidecar_base}/vectorize-movie/{media_item_id}");
+        match client.post(&sidecar_url).send().await {
+            Ok(res) => tracing::info!("ML Sidecar single movie vectorize for media_item_id={media_item_id}: status={}", res.status()),
+            Err(e) => tracing::warn!("ML Sidecar not reachable during single movie vectorize (non-fatal): {e}"),
+        }
+    });
 
     Ok(row)
 }

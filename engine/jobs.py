@@ -17,18 +17,24 @@ async def get_genre_vocabulary(conn):
         genre_cache.append((row["genre_name"],row["position"]))
     return genre_cache
 
+CURRENT_VOCABULARY_VERSION = 1
+
 async def build_movie_vector(conn, media_item):
-    print(media_item)
     genre_list = await get_genre_vocabulary(conn)
-    existing = await conn.fetch('SELECT * FROM media_item_vectors WHERE media_item_id = $1', media_item["id"])
-    if existing:
+    existing = await conn.fetchrow('SELECT vocabulary_version FROM media_item_vectors WHERE media_item_id = $1', media_item["id"])
+    if existing and existing["vocabulary_version"] == CURRENT_VOCABULARY_VERSION:
         return
+
     vector = encode_genres(media_item["genres"], genre_list)
 
     await conn.execute('''
-            INSERT INTO media_item_vectors (media_item_id, embedding, vocabulary_version)
-            VALUES ($1, $2, $3)
-        ''', media_item["id"], str(vector), 1)
+        INSERT INTO media_item_vectors (media_item_id, embedding, vocabulary_version)
+        VALUES ($1, $2::vector, $3)
+        ON CONFLICT (media_item_id) DO UPDATE SET
+            embedding = EXCLUDED.embedding,
+            vocabulary_version = EXCLUDED.vocabulary_version,
+            computed_at = NOW()
+    ''', media_item["id"], str(vector), CURRENT_VOCABULARY_VERSION)
 
 
 
