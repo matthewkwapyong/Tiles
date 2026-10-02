@@ -502,6 +502,7 @@ pub async fn list_user_history(
     State(state): State<Arc<AppState>>,
     session: AuthSession,
 ) -> ApiResult<Json<Vec<HistoryItem>>> {
+    #[derive(sqlx::FromRow)]
     struct RawHistoryRow {
         log_id: i64,
         watched_at: String,
@@ -520,24 +521,23 @@ pub async fn list_user_history(
         popularity: Option<f64>,
     }
 
-    let rows = sqlx::query_as!(
-        RawHistoryRow,
+    let rows = sqlx::query_as::<_, RawHistoryRow>(
         r#"
         SELECT
             wl.id AS log_id,
-            TO_CHAR(wl.watched_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "watched_at!",
+            TO_CHAR(wl.watched_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS watched_at,
             wl.notes,
             CAST(r.rating AS FLOAT8) AS user_rating,
-            m.id AS "id!",
-            m.tmdb_id AS "tmdb_id!",
-            m.media_type AS "media_type!",
-            m.title AS "title!",
+            m.id,
+            m.tmdb_id,
+            m.media_type,
+            m.title,
             m.poster_path,
             m.backdrop_path,
             TO_CHAR(m.release_date, 'YYYY-MM-DD') AS release_date,
             CAST(m.vote_average AS FLOAT8)        AS vote_average,
             m.vote_count,
-            m.genres AS "genres!",
+            m.genres,
             CAST(m.popularity AS FLOAT8)          AS popularity
         FROM watched_log wl
         JOIN media_items m ON m.id = wl.media_item_id
@@ -545,8 +545,8 @@ pub async fn list_user_history(
         WHERE wl.user_id = $1
         ORDER BY wl.watched_at DESC
         "#,
-        session.user_id
     )
+    .bind(&session.user_id)
     .fetch_all(&state.db)
     .await?;
 
@@ -1042,10 +1042,10 @@ pub async fn list_user_ratings(
     State(state): State<Arc<AppState>>,
     session: AuthSession,
 ) -> ApiResult<Json<Vec<UserRatingItem>>> {
-    let rows = sqlx::query!(
+    let rows = sqlx::query_as::<_, RawUserRatingRow>(
         r#"
         SELECT
-            r.rating,
+            CAST(r.rating AS FLOAT8) AS rating,
             TO_CHAR(r.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at,
             m.id AS media_id,
             m.tmdb_id,
@@ -1063,16 +1063,16 @@ pub async fn list_user_ratings(
         WHERE r.user_id = $1
         ORDER BY r.updated_at DESC
         "#,
-        session.user_id
     )
+    .bind(&session.user_id)
     .fetch_all(&state.db)
     .await?;
 
     let items = rows
         .into_iter()
         .map(|r| UserRatingItem {
-            rating: r.rating.to_string().parse::<f64>().unwrap_or(0.0),
-            updated_at: r.updated_at.unwrap_or_default(),
+            rating: r.rating,
+            updated_at: r.updated_at,
             media: MediaItemSummary {
                 id: r.media_id,
                 tmdb_id: r.tmdb_id,
@@ -1099,12 +1099,19 @@ pub struct GenrePreference {
     pub count: i64,
 }
 
+#[derive(sqlx::FromRow)]
+struct RawTasteProfileRow {
+    genre_name: Option<String>,
+    count: Option<i64>,
+    avg_rating: Option<f64>,
+}
+
 /// GET /api/user/taste — Returns user's genre preference distribution
 pub async fn get_user_taste_profile(
     State(state): State<Arc<AppState>>,
     session: AuthSession,
 ) -> ApiResult<Json<Vec<GenrePreference>>> {
-    let rows = sqlx::query!(
+    let rows = sqlx::query_as::<_, RawTasteProfileRow>(
         r#"
         SELECT
             g.genre_name,
@@ -1117,8 +1124,8 @@ pub async fn get_user_taste_profile(
         GROUP BY g.genre_name
         ORDER BY avg_rating DESC, count DESC
         "#,
-        session.user_id
     )
+    .bind(&session.user_id)
     .fetch_all(&state.db)
     .await?;
 
