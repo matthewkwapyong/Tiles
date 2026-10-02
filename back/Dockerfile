@@ -14,6 +14,7 @@ RUN rm -rf src
 
 # Now copy real source and build for real
 COPY . .
+RUN touch src/main.rs
 RUN cargo build --release
 
 # ---- Stage 2: runtime ----
