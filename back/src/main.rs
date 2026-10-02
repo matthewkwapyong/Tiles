@@ -44,9 +44,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(pool) => {
             info!("Connected to database successfully!");
-            // Ensure user_lists and user_list_items tables exist
+            // Ensure Auth.js adapter tables and core user schema exist
             if let Err(e) = sqlx::query(
                 r#"
+                CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+                CREATE EXTENSION IF NOT EXISTS vector;
+                CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+                CREATE TABLE IF NOT EXISTS users (
+                    id                  TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+                    name                TEXT,
+                    email               TEXT        UNIQUE,
+                    "emailVerified"     TIMESTAMPTZ,
+                    image               TEXT,
+                    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMPTZ;
+
+                CREATE TABLE IF NOT EXISTS accounts (
+                    id                    TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+                    "userId"              TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    type                  TEXT        NOT NULL,
+                    provider              TEXT        NOT NULL,
+                    "providerAccountId"   TEXT        NOT NULL,
+                    refresh_token         TEXT,
+                    access_token          TEXT,
+                    expires_at            BIGINT,
+                    token_type            TEXT,
+                    scope                 TEXT,
+                    id_token              TEXT,
+                    session_state         TEXT,
+                    UNIQUE (provider, "providerAccountId")
+                );
+
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id              TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+                    "sessionToken"  TEXT        NOT NULL UNIQUE,
+                    "userId"        TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    expires         TIMESTAMPTZ NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS verification_tokens (
+                    identifier  TEXT        NOT NULL,
+                    token       TEXT        NOT NULL UNIQUE,
+                    expires     TIMESTAMPTZ NOT NULL,
+                    PRIMARY KEY (identifier, token)
+                );
+
                 CREATE TABLE IF NOT EXISTS user_lists (
                     id                  BIGSERIAL   PRIMARY KEY,
                     user_id             TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -71,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .execute(&pool)
             .await
             {
-                tracing::warn!("Auto-migration for user_lists: {e}");
+                tracing::warn!("Auto-migration for schema: {e}");
             }
 
             pool
