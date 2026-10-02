@@ -26,7 +26,8 @@ async def lifespan(app: FastAPI):
         min_size=10,
         max_size=50
     )
-    app.state.smodel = SentenceTransformer("./all-MiniLM-L6-v2")
+    model_path = "./all-MiniLM-L6-v2" if os.path.isdir("./all-MiniLM-L6-v2") else "all-MiniLM-L6-v2"
+    app.state.smodel = SentenceTransformer(model_path)
     yield
     # Clean up pool on shutdown
     await app.state.pool.close()
